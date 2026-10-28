@@ -26,7 +26,7 @@ kayıtlar yine de korunur ve dosya bir sonraki kayıtta güncellenir.
 
 ## Kullanım
 
-0. **Okul Bilgileri** → okul adı, il/ilçe, müdür, müdür yardımcıları ve logo. Yeni kurulumda
+0. **Okul Bilgileri** → okul adı, il/ilçe ve logo. Yeni kurulumda
    program bu sayfayla açılır.
 1. **Ders Programı** → *Yeni ders programı yükle* (e-Okul/MEBBİS PDF'i veya Excel). Okunanları
    kontrol edip kaydedin. Hemen ardından **İdarecileri belirle** ile her idarecinin görevini (Okul

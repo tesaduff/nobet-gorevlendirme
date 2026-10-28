@@ -1,4 +1,10 @@
-Sürüm 2.0.2
+Sürüm 2.0.3
+
+- Okul Bilgileri sayfasında yalnızca okul adı, il/ilçe ve logo var; idareciler buradan elle yazılmaz
+- İdareciler, ders programı yüklendikten sonra Ders Programı sayfasının altındaki İdareciler bölümünden listeden seçilir: Okul Müdürü / Müdür Yardımcısı / Diğer idareci. Program ilk yüklendiğinde bu pencere kendiliğinden açılır
+- Seçilen müdür ve müdür yardımcısı, yazdırılan çizelgelerdeki imza yerlerine yazılır
+
+Sürüm 2.0.2'deki yenilikler
 
 - Nöbetmatik öğretmen listesi: adlar tek hizada alt alta, sütunlar sabit genişlikte, tablo ekranın ortasında
 

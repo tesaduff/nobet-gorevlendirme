@@ -269,6 +269,23 @@ SCHOOL_KEYS = [("school", "Okul adı", "Ör. Atatürk Anadolu Lisesi"),
                ("vice_principal", "Müdür yardımcıları", "Ad Soyad, Ad Soyad (virgülle ayırın)")]
 
 
+def admin_roles_text(db):
+    """'Okul Müdürü: X · Müdür Yardımcısı: Y, Z · Diğer idareci: W' biçiminde özet."""
+    principal = db.get_setting("principal", "").strip()
+    vices = [n.strip() for n in re.split(r"[,;\n]", db.get_setting("vice_principal", ""))
+             if n.strip()]
+    key = {normalize(n) for n in [principal] + vices if n}
+    others = sorted((a for a in db.admins() if normalize(a) not in key), key=normalize)
+    parts = []
+    if principal:
+        parts.append(f"Okul Müdürü: <b>{principal}</b>")
+    if vices:
+        parts.append(f"Müdür Yardımcısı: <b>{', '.join(vices)}</b>")
+    if others:
+        parts.append(f"Diğer idareci: <b>{', '.join(others)}</b>")
+    return "  ·  ".join(parts)
+
+
 def logo_path():
     return os.path.join(data_dir(), "logo.png")
 
@@ -360,7 +377,7 @@ class SchoolTab(QWidget):
         form.setVerticalSpacing(12)
         form.setHorizontalSpacing(16)
         self.fields = {}
-        for key, label, hint in SCHOOL_KEYS:
+        for key, label, hint in SCHOOL_KEYS[:2]:  # idareciler ders programından seçilir
             e = QLineEdit()
             e.setPlaceholderText(hint)
             e.setMinimumHeight(36)
@@ -382,15 +399,11 @@ class SchoolTab(QWidget):
         lv.addWidget(clear)
         lv.addStretch()
 
-        admins = QPushButton("👤  İdarecileri belirle (müdür / müdür yardımcısı)…")
-        admins.clicked.connect(lambda: self.win.sched.edit_admins())
         save = variant(QPushButton("💾  Kaydet"), "primary")
         save.setMinimumHeight(44)
         save.setMinimumWidth(180)
         save.clicked.connect(self.save)
-        note = QLabel("Okul müdürü ve müdür yardımcılarına otomatik ders görevlendirmesi yapılmaz. "
-                      "Ders programı yüklendikten sonra <b>İdarecileri belirle</b> ile listeden "
-                      "kimin müdür, kimin müdür yardımcısı olduğunu seçebilirsiniz.")
+        self.admins_note = note = QLabel()
         note.setWordWrap(True)
         note.setObjectName("subtitle")
 
@@ -406,7 +419,6 @@ class SchoolTab(QWidget):
         h.addLayout(right, 1)
         card.setMaximumWidth(900)
         foot = QHBoxLayout()
-        foot.addWidget(admins)
         foot.addStretch()
         foot.addWidget(save)
         wrap = QVBoxLayout()
@@ -430,6 +442,12 @@ class SchoolTab(QWidget):
             e.setText(self.db.get_setting(key, ""))
         self.new_logo, self.remove_logo = None, False
         self._show_logo(logo_path() if os.path.exists(logo_path()) else None)
+        roles = admin_roles_text(self.db)
+        self.admins_note.setText(
+            ("<b>İdareciler:</b> " + roles + "<br>" if roles else "") +
+            "Okul müdürü ve müdür yardımcıları, ders programı yüklendikten sonra "
+            "<b>1 Ders Programı</b> sayfasının altındaki <b>İdareciler</b> bölümünden listeden "
+            "seçilir. Çıktılardaki imza yerlerine bu seçim yazılır.")
 
     def _show_logo(self, path):
         pm = QPixmap(path) if path else QPixmap()
@@ -810,7 +828,7 @@ class DailyTab(QWidget):
     def _update_setup(self, has_schedule, has_duty):
         has_school = bool(self.db.get_setting("school", ""))
         self.step0.setText(("✅  " if has_school else "1️⃣  ") + "Okul bilgilerini girin\n"
-                           "      okul adı, idareciler, logo")
+                           "      okul adı, il/ilçe, logo")
         self.step1.setText(("✅  " if has_schedule else "2️⃣  ") + "Ders programını yükleyin\n"
                            "      PDF veya Excel")
         self.step2.setText(("✅  " if has_duty else "3️⃣  ") + "Nöbet çizelgesini yükleyin\n"
@@ -1237,7 +1255,7 @@ class ScheduleTab(QWidget):
         self.admins_label.setWordWrap(True)
         edit_admins = variant(QPushButton("👤  İdarecileri belirle…"), "primary")
         edit_admins.clicked.connect(self.edit_admins)
-        card2 = QGroupBox("İdareciler — otomatik görevlendirilmez, nöbet çizelgesine konmaz")
+        card2 = QGroupBox("İdareciler — okul müdürü ve müdür yardımcıları (otomatik görev verilmez)")
         c2 = QHBoxLayout(card2)
         c2.addWidget(self.admins_label, 1)
         c2.addWidget(edit_admins, 0, Qt.AlignVCenter)
@@ -1292,7 +1310,7 @@ class ScheduleTab(QWidget):
             self.admins_label.setText("Ders programını yükledikten sonra idarecileri (okul müdürü, "
                                       "müdür yardımcıları) burada işaretleyin.")
         elif admins:
-            self.admins_label.setText("<b>" + ", ".join(admins) + "</b><br>Bu kişilere otomatik "
+            self.admins_label.setText(admin_roles_text(self.db) + "<br>Bu kişilere otomatik "
                                       "ders görevlendirmesi ve otomatik nöbet verilmez; "
                                       "görevlendirme ekranında elle seçilebilirler.")
         else:
@@ -1894,7 +1912,9 @@ class AdminsDialog(QDialog):
                  if n.strip()}
         self.search = QLineEdit()
         self.search.setPlaceholderText("🔍  Öğretmen ara…")
-        names = sorted(set(teachers) | set(selected), key=normalize)
+        chosen = set(selected) | vices | {principal}
+        names = sorted(set(teachers) | set(selected),
+                       key=lambda t: (t != principal, t not in vices, t not in chosen, normalize(t)))
         self.table = QTableWidget(len(names), 2)
         self.table.setHorizontalHeaderLabels(["Öğretmen", "Görevi"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -2302,9 +2322,6 @@ class MainWindow(QMainWindow):
         """İdareciler bir kez onaylanmadıysa sorar (seçilmezse onlara da ders verilirdi)."""
         if self.db.get_setting("admins_confirmed") == "1" or not self.db.all_teachers():
             return
-        _info(self, "Okulunuzdaki idarecileri (okul müdürü, müdür yardımcıları) işaretleyin. "
-                    "İşaretlenenlere otomatik ders görevlendirmesi yapılmaz; isterseniz "
-                    "görevlendirme ekranında elle seçebilirsiniz.", "İdareciler")
         if AdminsDialog(self, self.db).exec() == QDialog.Accepted:
             self.sched.refresh_admins()
             self.school_tab.refresh()
