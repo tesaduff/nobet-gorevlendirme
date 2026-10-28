@@ -402,3 +402,26 @@ def test_duty_nearest_week_fallback(tmp_path):
     assert db.duty_for("2026-10-26")[0] == [("B", "Bahçe")]
     assert db.duty_for("2026-10-12")[0] == [("A", "Bahçe")]   # çizelgede olmayan hafta
     assert db.duty_for("2026-11-02")[0] == [("B", "Bahçe")]   # yeni ay yüklenmedi
+
+
+def test_admins_never_assigned_and_split_blocks(tmp_path):
+    sched = {"A": {(0, 1): "9A"}, "IDARECI": {(0, 2): "x"}, "B": {(0, 3): "x"}}
+    plan = plan_day("2026-11-02", sched, [("IDARECI", "N.İDARECİ")], {"A": "R"}, {}, {},
+                    excluded={"IDARECI"})
+    assert plan.assignments[0].assigned == "B" and plan.assignments[0].kind == "bos"
+    assert all(t != "IDARECI" for t, _ in plan.assignments[0].options)
+    from nobet.parse_duty import DutyEntry
+    db = Database(str(tmp_path / "t.db"))
+    db.save_duty("2026-10", [DutyEntry(0, "IDARECI", "N.İDARECİ"), DutyEntry(0, "N", "Bahçe")])
+    assert db.admins() == {"IDARECI"}
+    db.set_admins({"IDARECI", "X"})
+    assert db.admins() == {"IDARECI", "X"}
+    db.set_admins({"X"})
+    assert db.admins() == {"X"}
+    db.reset_all()
+    assert db.duty_months() == [] and db.schedule_versions() == []
+    from nobet.parse_schedule import ScheduleResult, _join_split_blocks
+    r = ScheduleResult()
+    r.teachers = {"T": {(0, 1): "TÜRKÇE", (0, 2): "5A", (0, 4): "7/D Yazarlık"}}
+    _join_split_blocks(r)
+    assert r.teachers["T"][(0, 1)] == r.teachers["T"][(0, 2)] == "5A TÜRKÇE"

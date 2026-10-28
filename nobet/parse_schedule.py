@@ -201,6 +201,7 @@ def parse_schedule(pages, known_teachers=()):
                 continue
         if not page.get("tables") and page.get("text", "").strip():
             unknown += 1
+    _join_split_blocks(res)
     if unknown:
         res.warnings.append(f"{unknown} sayfada tablo bulunamadı (atlandı).")
     if not res.teachers:
@@ -388,3 +389,20 @@ def _parse_days_in_rows(grid, owner, kind, res, matcher, p_idx):
         res.layouts.append("sayfa başına (devrik)")
         return True
     return False
+
+
+def _join_split_blocks(res):
+    """Ardışık iki saatte biri yalnızca sınıf, diğeri yalnızca ders adıysa (blok dersin yazısı
+    iki hücreye bölünmüş) ikisini de "sınıf ders" yapar: "TÜRKÇE" + "5A" -> "5A TÜRKÇE"."""
+    from .names import split_info
+    for slots in res.teachers.values():
+        for (d, h) in sorted(slots):
+            nxt = (d, h + 1)
+            if nxt not in slots:
+                continue
+            c1, l1 = split_info(slots[(d, h)])
+            c2, l2 = split_info(slots[nxt])
+            if c1 and not l1 and l2 and not c2:
+                slots[(d, h)] = slots[nxt] = f"{c1} {l2}"
+            elif l1 and not c1 and c2 and not l2:
+                slots[(d, h)] = slots[nxt] = f"{c2} {l1}"

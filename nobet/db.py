@@ -253,3 +253,32 @@ class Database:
             for t, _p in rows:
                 out[t] = out.get(t, 0) + 1
         return out
+
+    # ---- idareciler (hiç görevlendirilmez)
+    def admins(self):
+        """Nöbet çizelgelerinde idareci olarak geçenler + elle eklenenler − elle çıkarılanlar."""
+        import json
+        from .parse_duty import is_admin_place
+        auto = {t for t, p in self.conn.execute("SELECT DISTINCT teacher, place FROM duty_entries")
+                if is_admin_place(p or "")}
+        extra = set(json.loads(self.get_setting("admins_extra", "[]")))
+        removed = set(json.loads(self.get_setting("admins_removed", "[]")))
+        return (auto | extra) - removed
+
+    def set_admins(self, names):
+        import json
+        from .parse_duty import is_admin_place
+        auto = {t for t, p in self.conn.execute("SELECT DISTINCT teacher, place FROM duty_entries")
+                if is_admin_place(p or "")}
+        names = set(names)
+        self.set_setting("admins_extra", json.dumps(sorted(names - auto), ensure_ascii=False))
+        self.set_setting("admins_removed", json.dumps(sorted(auto - names), ensure_ascii=False))
+
+    def reset_all(self):
+        """Ders programı, nöbet çizelgeleri ve tüm kayıtları siler; okul bilgileri ve ayarlar kalır."""
+        for table in ("schedule_entries", "schedule_versions", "duty_entries", "absences",
+                      "assignments"):
+            self.conn.execute(f"DELETE FROM {table}")
+        for key in ("admins_extra", "admins_removed"):
+            self.conn.execute("DELETE FROM settings WHERE key=?", (key,))
+        self.conn.commit()

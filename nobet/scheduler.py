@@ -35,7 +35,8 @@ def teachers_with_lessons(schedule, weekday):
     return sorted(t for t, slots in schedule.items() if any(d == weekday for d, _ in slots))
 
 
-def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per_day=0):
+def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per_day=0,
+             excluded=()):
     """Günün görevlendirmesini hesaplar.
 
     schedule: {öğretmen: {(gün, saat): bilgi}}
@@ -45,11 +46,13 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
     total_counts: {öğretmen: tüm zamanlar toplamı} — bu gün hariç
     max_per_day: bir nöbetçiye günde en fazla kaç ders verileceği (0 = sınırsız). Sınıra
         ulaşan nöbetçinin yerine boş öğretmen aranır; kimse yoksa yine nöbetçiye verilir.
+    excluded: hiçbir zaman derse görevlendirilmeyecekler (ör. idareciler).
     """
+    excluded = set(excluded)
     weekday = dt.date.fromisoformat(date).weekday()
     duty_names = []
     for t, _ in duty:
-        if t not in duty_names:
+        if t not in duty_names and t not in excluded:
             duty_names.append(t)
     teaching = teachers_with_lessons(schedule, weekday)
 
@@ -79,7 +82,7 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         h = a.hour
         free_duty = [t for t in duty_names if t not in absences and h not in busy.get(t, set())]
         free_other = [t for t in teaching if t not in absences and t not in duty_names
-                      and h not in busy.get(t, set())]
+                      and t not in excluded and h not in busy.get(t, set())]
         a.options = ([(t, "nöbetçi") for t in sorted(free_duty, key=fairness)] +
                      [(t, "pencere" if window(t, h) else "boş saat")
                       for t in sorted(free_other, key=lambda t: (not window(t, h), fairness(t)))])
@@ -101,7 +104,7 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
             a.note = f"Günlük {max_per_day} ders sınırı aşıldı; başka boş öğretmen yok."
         else:
             a.assigned, a.kind = None, "yok"
-            a.note = "⚠ Bu saatte boş öğretmen yok. Sınıf birleştirme veya idareci görevlendirin."
+            a.note = "⚠ Bu saatte boş öğretmen yok. Elle seçin veya sınıf birleştirin."
         if a.assigned:
             busy.setdefault(a.assigned, set()).add(h)
             today[a.assigned] = today.get(a.assigned, 0) + 1

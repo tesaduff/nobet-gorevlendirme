@@ -1,7 +1,11 @@
-Sürüm 1.3.0 — sade, adım adım görevlendirme ekranı
+Sürüm 1.4.0 — kademeli ekranlar, idareciler görevlendirilmez
 
-1. Tarihi seçin: solda yalnızca o gün dersi olan öğretmenler listelenir. Gelmeyen öğretmenin durumunu seçin (Raporlu, İzinli, Görevli, Sevkli, Kurs / Seminer, Diğer).
-2. Sağda boş kalan dersler (saat, sınıf, ders) ve bugünün nöbetçileri görünür: her nöbetçinin boş saatleri, boş derslere uygun olduğu saatler ve bu ay girdiği ders sayısı.
-3. "Görevlendir"e basın: program istatistiğe göre adil dağıtır. İstediğiniz satırda öğretmeni değiştirip Yazdır veya Kaydet deyin.
-
-Ayrıca 1.2.0'daki yenilikler: tek tıkla kurulum, program simgesi, okul ve tema ayarları, logolu resmî çıktı.
+- Menü sırası: 1 Ders Programı → 2 Nöbet Çizelgesi → 3 Görevlendirme; program eksik olan ilk adımdan açılır
+- Görevlendirme 3 tam sayfa adımda: (1) tarih ve gelmeyen öğretmenler (2) boş kalan dersler ve nöbetçilerin boş saatleri (3) sonuç
+- "Görevlendir"e basınca sonuç hemen istatistiğe kaydedilir; elle yapılan değişiklikler de kendiliğinden kaydedilir
+- İdareciler (nöbet çizelgesinde N.İDARECİ / müdür yardımcısı olarak geçenler) hiçbir gün görevlendirilmez; liste Ayarlar'dan düzenlenebilir
+- Ders programı ve nöbet çizelgesi sayfaları kademeli: önce özet, "Görüntüle" ile tam sayfa
+- Ay değişince açılışta yeni nöbet çizelgesi (ve değiştiyse ders programı) istenir
+- Küçük ekranlar için düzen: program tam ekran açılır, sayfalar sıkışmaz
+- Ayarlar sayfası yenilendi; "Tüm verileri sil, sıfırdan başla" düğmesi eklendi
+- Bölünmüş blok ders hücreleri ("TÜRKÇE" + "5A") birleşik okunur

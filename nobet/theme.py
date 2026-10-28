@@ -5,7 +5,7 @@ import sys
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                               QStackedWidget, QVBoxLayout, QWidget)
+                               QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
 
 # Ayarlar'dan seçilebilen vurgu renkleri: ad -> (ana renk, üzerine gelince, açık ton, menü zemini)
 ACCENTS = {
@@ -57,7 +57,7 @@ def build_style(accent="Mor", dark=False):
 
 STYLE = """
 QWidget {{ color: {TEXT}; font-size: 10pt; }}
-QMainWindow, QDialog, #page {{ background: {BG}; }}
+QMainWindow, QDialog, #page, QScrollArea#page > QWidget > QWidget {{ background: {BG}; }}
 QToolTip {{ background: {TEXT}; color: white; border: none; padding: 6px; border-radius: 4px; }}
 
 /* Kartlar */
@@ -183,6 +183,39 @@ def page_header(title, subtitle=""):
     return w
 
 
+class StepBar(QFrame):
+    """Kademeli sayfaların üstündeki adım göstergesi: ① Öğretmen seç  ›  ② …"""
+
+    def __init__(self, titles):
+        super().__init__()
+        self.setObjectName("card")
+        self.labels = []
+        h = QHBoxLayout(self)
+        h.setContentsMargins(14, 8, 14, 8)
+        for i, t in enumerate(titles):
+            if i:
+                arrow = QLabel("›")
+                arrow.setObjectName("subtitle")
+                arrow.setStyleSheet("font-size:14pt")
+                h.addWidget(arrow)
+            lab = QLabel(f"{i + 1}  {t}")
+            lab.setContentsMargins(10, 4, 10, 4)
+            self.labels.append(lab)
+            h.addWidget(lab)
+        h.addStretch()
+        self.set(0)
+
+    def set(self, index):
+        for i, lab in enumerate(self.labels):
+            if i == index:
+                lab.setStyleSheet(f"background:{ACCENT}; color:white; border-radius:8px;"
+                                  " font-weight:700")
+            elif i < index:
+                lab.setStyleSheet(f"color:{ACCENT}; font-weight:600")
+            else:
+                lab.setStyleSheet(f"color:{MUTED}")
+
+
 class StatCard(QFrame):
     def __init__(self, label, color=ACCENT):
         super().__init__()
@@ -211,7 +244,7 @@ class NavPages(QWidget):
         super().__init__()
         side = QFrame()
         side.setObjectName("sidebar")
-        side.setFixedWidth(232)
+        side.setFixedWidth(210)
         sv = QVBoxLayout(side)
         sv.setContentsMargins(0, 22, 0, 16)
         sv.setSpacing(4)
@@ -254,14 +287,22 @@ class NavPages(QWidget):
         if pixmap and not pixmap.isNull():
             self.logo.setPixmap(pixmap.scaled(58, 58, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-    def addTab(self, widget, label):
+    def addTab(self, widget, label, min_height=0):
+        """Sayfayı kaydırılabilir alana koyar: küçük ekranlarda içerik sıkışmaz, kaydırılır."""
         page = QWidget()
         page.setObjectName("page")
         v = QVBoxLayout(page)
-        v.setContentsMargins(22, 18, 22, 14)
+        v.setContentsMargins(18, 14, 18, 12)
         v.addWidget(widget)
-        widget.setParent(page)
-        self.stack.addWidget(page)
+        if min_height:
+            page.setMinimumHeight(min_height)
+        scroll = QScrollArea()
+        scroll.setObjectName("page")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(page)
+        self._widgets = getattr(self, "_widgets", []) + [widget]
+        self.stack.addWidget(scroll)
         self.nav.addItem(QListWidgetItem(label))
         if self.nav.count() == 1:
             self.nav.setCurrentRow(0)
@@ -271,8 +312,8 @@ class NavPages(QWidget):
         self.currentChanged.emit(i)
 
     def widget(self, i):
-        page = self.stack.widget(i)
-        return page.layout().itemAt(0).widget() if page else None
+        widgets = getattr(self, "_widgets", [])
+        return widgets[i] if 0 <= i < len(widgets) else None
 
     def setCurrentWidget(self, widget):
         for i in range(self.stack.count()):
