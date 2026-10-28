@@ -429,3 +429,103 @@ def test_admins_never_assigned_and_split_blocks(tmp_path):
     r.teachers = {"T": {(0, 1): "TÜRKÇE", (0, 2): "5A", (0, 4): "7/D Yazarlık"}}
     _join_split_blocks(r)
     assert r.teachers["T"][(0, 1)] == r.teachers["T"][(0, 2)] == "5A TÜRKÇE"
+
+
+# ---- Nöbetmatik
+
+def _sched(n=12):
+    """n öğretmen; her biri her gün 4 ders, ama T0 Pazartesi 7 ders (tam dolu), T1 Salı dersi yok."""
+    s = {}
+    for i in range(n):
+        t = f"T{i}"
+        s[t] = {(d, h): "x" for d in range(5) for h in range(1, 5)}
+    s["T0"].update({(0, h): "x" for h in range(1, 8)})
+    for h in range(1, 5):
+        del s["T1"][(1, h)]
+    return s
+
+
+def test_nobetmatik_basic_capacity_and_rotation():
+    from nobet.nobetmatik import Config, distribute
+    sched = _sched(8)
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1], ["Zemin", 1]])
+    res = distribute(cfg, sched)
+    # 8 öğretmen, günde 2 yer -> her gün en fazla 2 kişi, herkes tam 1 gün
+    assert all(len(v) <= 2 for v in res.by_day.values())
+    assert sorted(t for v in res.by_day.values() for t in v) == sorted(sched)
+    assert "T1" not in res.by_day[1]          # dersi olmayan güne nöbet yok
+    # Yerler haftalık değişir
+    t = res.by_day[[d for d in range(5) if res.by_day[d]][0]][0]
+    places = [e.place for e in sorted(res.entries, key=lambda e: e.date) if e.teacher == t]
+    assert len(set(places)) == 2 and places[0] != places[1]
+    # Kasım 2026: 5 hafta (2-6, 9-13, 16-20, 23-27, 30)
+    assert len(res.weeks) == 5
+
+
+def test_nobetmatik_rules():
+    from nobet.nobetmatik import Config, distribute
+    sched = _sched(10)
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 2], ["Zemin", 1]],
+                 exempt={"T9": "Sağlık raporu"},
+                 fixed=[{"teacher": "T2", "day": 3, "place": "Zemin"}],
+                 together=[["T3", "T4"]], apart=[["T5", "T6"]],
+                 allowed_days={"T7": [4]}, admins_by_day={"0": "IDARECI"})
+    res = distribute(cfg, sched)
+    day = {t: d for d, ts in res.by_day.items() for t in ts}
+    assert "T9" not in day                                   # muaf
+    assert day["T2"] == 3                                    # sabit gün
+    assert all(e.place == "Zemin" for e in res.entries if e.teacher == "T2")   # sabit yer
+    assert day["T3"] == day["T4"]                            # beraber
+    assert day["T5"] != day["T6"]                            # ayrı
+    assert day["T7"] == 4                                    # gün kısıtı
+    assert day.get("T0") != 0                                # tam dolu gün tercih edilmez
+    assert {e.place for e in res.entries if e.teacher == "IDARECI"} == {"N.İDARECİ"}
+    assert all(e.weekday == 0 for e in res.entries if e.teacher == "IDARECI")
+
+
+def test_nobetmatik_shortage_uses_yearly_history():
+    from nobet.nobetmatik import Config, distribute
+    sched = _sched(7)
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1]])
+    history = {"T5": 9, "T6": 8}
+    res = distribute(cfg, sched, history)
+    assigned = {t for v in res.by_day.values() for t in v}
+    assert len(assigned) == 5 and set(res.unassigned) == {"T5", "T6"}
+    assert any("yetersiz" in w for w in res.warnings)
+
+
+def test_nobetmatik_two_per_week_fills_slots():
+    from nobet.nobetmatik import Config, distribute
+    sched = _sched(4)
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1]], per_week=2)
+    res = distribute(cfg, sched)
+    counts = {}
+    for d, ts in res.by_day.items():
+        for t in ts:
+            counts[t] = counts.get(t, 0) + 1
+    assert sum(counts.values()) == 5 and max(counts.values()) == 2
+
+
+def test_yearly_fairness_carries_over_months(tmp_path):
+    db = Database(str(tmp_path / "t.db"))
+    sched = {"A": {(0, 1): "9A", (0, 2): "9A"}, "N1": {}, "N2": {}}
+    # Ekim: N1 iki derse girmiş
+    oct_plan = plan_day("2026-10-05", sched, [("N1", ""), ("N2", "")], {"A": "R"}, {}, {})
+    for a in oct_plan.assignments:
+        a.assigned, a.kind = "N1", "nobetci"
+    db.save_day("2026-10-05", oct_plan.absences, oct_plan.assignments)
+    year = db.year_counts("2026-11-02", exclude_date="2026-11-02")
+    assert year["N1"][0] == 2 and db.counts("2026-11") == {}
+    nov = plan_day("2026-11-02", sched, [("N1", ""), ("N2", "")], {"A": "R"}, {}, {},
+                   year_counts=year)
+    # Kasım'da aylık sayılar sıfır olsa da N2 önce gelir (yıllık adalet)
+    assert nov.assignments[0].assigned == "N2"
+    assert Database.school_year_start("2027-03-10") == "2026-09-01"
+    assert Database.school_year_start("2026-09-01") == "2026-09-01"
+
+
+def test_nobetmatik_config_roundtrip_keeps_options():
+    from nobet.nobetmatik import Config
+    c = Config.from_dict({"rotate": True, "skip_free_days": False, "places": [["Bahçe", 3]]})
+    d = Config.from_dict(c.to_dict())
+    assert d.rotate is True and d.skip_free_days is False and d.places == [["Bahçe", 3]]

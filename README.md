@@ -26,18 +26,18 @@ kayıtlar yine de korunur ve dosya bir sonraki kayıtta güncellenir.
 
 ## Kullanım
 
-1. **Ders Programı** sekmesi → *Yeni ders programı yükle*. e-Okul/MEBBİS'ten aldığınız
-   PDF'i veya Excel dosyasını seçin. Okunan program önizlemede görünür. Yanlış okunan isimleri
-   düzeltip *program şu tarihten itibaren geçerli* tarihini girerek kaydedin.
-   Program değişirse yeni dosyayı yeni bir tarihle yükleyin. Eski günler eski programla kalır.
-2. **Nöbet Çizelgesi** sekmesi → her ay o ayın çizelgesini yükleyin. İsimler ders
-   programındaki öğretmenlerle otomatik eşleştirilir. Kaydetmeden önce kontrol edip
-   düzeltebilirsiniz.
-3. **Günlük Görevlendirme** sekmesi → tarihi seçin, gelmeyen öğretmenlerin durumunu
-   *Raporlu / İzinli / Görevli / Diğer* yapın ve **Görevlendirmeyi Oluştur**'a basın.
-   Sonuçta isterseniz görevlendirilen kişiyi elle değiştirin, sonra **Kaydet**. Çizelgeyi Excel'e
-   aktarabilir veya yazdırabilirsiniz.
-4. **Aylık Rapor** → kim bu ay kaç derse girdi, nöbetçi olarak mı yoksa boş saatinde mi.
+1. **Ders Programı** → *Yeni ders programı yükle* (e-Okul/MEBBİS PDF'i veya Excel). Okunanları
+   kontrol edip kaydedin. Hemen ardından **İdarecileri belirle** ile okul müdürü ve müdür
+   yardımcılarını işaretleyin; onlara otomatik görev verilmez.
+2. **Nöbetmatik** → *Nöbetmatik ile yeni çizelge oluştur*. Adım adım: ay ve öğretmenler (muaflar ve
+   mazeretleri), nöbet yerleri ve kişi sayıları, seçenekler, kurallar (sabitle, beraber, ayrı, gün
+   kısıtı), dağıt. Önizleyip yazdırın, **Kaydet ve kullan** deyin. Hazır çizelgeniz varsa
+   *PDF/Excel'den yükle* ile de alabilirsiniz.
+3. **Görevlendirme** → tarihi seçin, gelmeyen öğretmenin durumunu (Raporlu, İzinli, Görevli…)
+   seçin, *Devam*, *Görevlendir*. Sonuç kaydedilir; isterseniz satır satır değiştirip yazdırın.
+4. **Aylık Rapor** → kim bu ay ve bu eğitim yılında kaç derse girdi.
+
+Yeni ay başlayınca program uyarır ve Nöbetmatik'i açmayı önerir.
 
 ### Dağıtım kuralları
 

@@ -55,7 +55,7 @@ def _ask(parent, text, title="Onay"):
 
 def _stretch(table, *cols):
     table.setAlternatingRowColors(True)
-    table.verticalHeader().setDefaultSectionSize(34)
+    table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
     table.setShowGrid(False)
     h = table.horizontalHeader()
     h.setSectionResizeMode(QHeaderView.ResizeToContents)
@@ -216,6 +216,40 @@ def logo_path():
     return os.path.join(data_dir(), "logo.png")
 
 
+def round_logo(img, size=512):
+    """Logoyu yuvarlak keser: ortadaki en büyük daire kalır, köşelerdeki beyazlık saydam olur.
+
+    Resmin kendi kenarlarında beyaz boşluk varsa önce kırpılır, böylece daire logoya oturur.
+    """
+    from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath
+    img = img.convertToFormat(QImage.Format_ARGB32)
+    # Kenarlardaki beyaz / saydam boşluğu kırp
+    w, h = img.width(), img.height()
+
+    def blank(x, y):
+        c = img.pixelColor(x, y)
+        return c.alpha() < 20 or (c.red() > 235 and c.green() > 235 and c.blue() > 235)
+
+    step = max(1, min(w, h) // 200)
+    xs = [x for x in range(0, w, step) if not all(blank(x, y) for y in range(0, h, step))]
+    ys = [y for y in range(0, h, step) if not all(blank(x, y) for x in range(0, w, step))]
+    if xs and ys:
+        img = img.copy(min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
+    side = min(img.width(), img.height())
+    img = img.copy((img.width() - side) // 2, (img.height() - side) // 2, side, side)
+    img = img.scaled(size, size, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+    out = QImage(size, size, QImage.Format_ARGB32)
+    out.fill(Qt.transparent)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.Antialiasing)
+    path = QPainterPath()
+    path.addEllipse(0, 0, size, size)
+    p.setClipPath(path)
+    p.drawImage(0, 0, img)
+    p.end()
+    return out
+
+
 MONTHS_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül",
              "Ekim", "Kasım", "Aralık"]
 
@@ -295,17 +329,11 @@ class SchoolDialog(QDialog):
         lh.addStretch()
         form.addRow("Okul logosu:", lh)
 
-        # İdareciler: müdür ve müdür yardımcıları zaten görevlendirilmez; diğerleri buradan seçilir
-        self.admins = set(db.admins())
-        self.admins_label = QLabel()
-        self.admins_label.setWordWrap(True)
-        self.admins_btn = QPushButton("İdarecileri seç…")
-        self.admins_btn.clicked.connect(self._pick_admins)
-        ah = QVBoxLayout()
-        ah.addWidget(self.admins_label)
-        ah.addWidget(self.admins_btn, 0, Qt.AlignLeft)
-        form.addRow("Görevlendirilmeyecek\nidareciler:", ah)
-        self._show_admins()
+        note = QLabel("Okul müdürü ve müdür yardımcılarına otomatik ders görevlendirmesi yapılmaz. "
+                      "Diğer idareciler ders programı yüklendikten sonra belirlenir.")
+        note.setWordWrap(True)
+        note.setObjectName("subtitle")
+        form.addRow("", note)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Save).setText("Kaydet")
         variant(buttons.button(QDialogButtonBox.Save), "primary")
@@ -318,22 +346,6 @@ class SchoolDialog(QDialog):
         v.addLayout(form)
         v.addStretch()
         v.addWidget(buttons)
-
-    def _show_admins(self):
-        teachers = self.db.all_teachers()
-        if not teachers:
-            self.admins_label.setText("Okul müdürü ve müdür yardımcıları görevlendirilmez. Diğer "
-                                      "idarecileri ders programını yükledikten sonra seçebilirsiniz.")
-            self.admins_btn.setEnabled(False)
-            return
-        names = sorted(self.admins, key=normalize)
-        self.admins_label.setText(", ".join(names) if names else "Henüz seçilmedi.")
-
-    def _pick_admins(self):
-        dlg = AdminsDialog(self, self.db.all_teachers(), self.admins)
-        if dlg.exec() == QDialog.Accepted:
-            self.admins = dlg.selected()
-            self._show_admins()
 
     def _show_logo(self, path):
         pm = QPixmap(path) if path else QPixmap()
@@ -360,15 +372,12 @@ class SchoolDialog(QDialog):
             return
         for key, e in self.fields.items():
             self.db.set_setting(key, e.text().strip())
-        if self.db.all_teachers():
-            self.db.set_admins(self.admins)
-            self.db.set_setting("admins_confirmed", "1")
         if self.new_logo:
             img = QImage(self.new_logo)
             if img.isNull():
                 _info(self, "Seçilen resim açılamadı.")
                 return
-            img.scaled(512, 512, Qt.KeepAspectRatio, Qt.SmoothTransformation).save(logo_path())
+            round_logo(img).save(logo_path())
         elif self.remove_logo and os.path.exists(logo_path()):
             os.remove(logo_path())
         self.accept()
@@ -909,8 +918,9 @@ class DailyTab(QWidget):
         counts = self.db.counts(date[:7], exclude_date=date)
         totals = self.db.total_counts(exclude_date=date)
         cap = int(self.db.get_setting("max_per_day", "0") or 0)
+        year = self.db.year_counts(date, exclude_date=date)
         self.plan = plan_day(date, self.schedule, self.duty, self.absences(), counts, totals, cap,
-                             excluded=self.admins)
+                             excluded=self.admins, year_counts=year)
         if saved:
             by_key = {(h, t): (a, k, n) for h, t, _info_, a, k, n in saved}
             for a in self.plan.assignments:
@@ -1104,16 +1114,28 @@ class ScheduleTab(QWidget):
                       "Önceki günler eski programla, sonraki günler yeni programla hesaplanır.")
         hint.setWordWrap(True)
         c1.addWidget(hint)
-        c1.addWidget(self.versions, 1)
         bh = QHBoxLayout()
         bh.addWidget(load, 1)
         bh.addWidget(view, 1)
         bh.addWidget(rem)
         c1.addLayout(bh)
+        c1.addWidget(self.versions, 1)
+
+        # İdareciler: ders programı yüklendikten hemen sonra belirlenir
+        self.admins_label = QLabel()
+        self.admins_label.setWordWrap(True)
+        edit_admins = variant(QPushButton("👤  İdarecileri belirle…"), "primary")
+        edit_admins.clicked.connect(self.edit_admins)
+        card2 = QGroupBox("İdareciler — otomatik görevlendirilmez, nöbet çizelgesine konmaz")
+        c2 = QHBoxLayout(card2)
+        c2.addWidget(self.admins_label, 1)
+        c2.addWidget(edit_admins, 0, Qt.AlignVCenter)
+
         p1 = QWidget()
         v1 = QVBoxLayout(p1)
         v1.setContentsMargins(0, 0, 0, 0)
         v1.addWidget(card1, 1)
+        v1.addWidget(card2)
 
         # Kademe 2: öğretmenler ve haftalık program (tam sayfa)
         back = QPushButton("←  Geri")
@@ -1153,6 +1175,31 @@ class ScheduleTab(QWidget):
         v.addWidget(self.steps, 1)
         self.refresh()
 
+    def refresh_admins(self):
+        admins = sorted(self.db.admins(), key=normalize)
+        if not self.db.all_teachers():
+            self.admins_label.setText("Ders programını yükledikten sonra idarecileri (okul müdürü, "
+                                      "müdür yardımcıları) burada işaretleyin.")
+        elif admins:
+            self.admins_label.setText("<b>" + ", ".join(admins) + "</b><br>Bu kişilere otomatik "
+                                      "ders görevlendirmesi ve Nöbetmatik'te nöbet verilmez; "
+                                      "görevlendirme ekranında elle seçilebilirler.")
+        else:
+            self.admins_label.setText("<span style='color:#dc2626'><b>Henüz idareci "
+                                      "belirlenmedi.</b> Belirlemezseniz idarecilere de ders "
+                                      "görevlendirilir.</span>")
+
+    def edit_admins(self):
+        if not self.db.all_teachers():
+            _info(self, "Önce ders programını yükleyin.")
+            return
+        dlg = AdminsDialog(self, self.db.all_teachers(), self.db.admins())
+        if dlg.exec() == QDialog.Accepted:
+            self.db.set_admins(dlg.selected())
+            self.db.set_setting("admins_confirmed", "1")
+            self.refresh_admins()
+            self.win.changed()
+
     def open_view(self):
         if not self.version:
             self.refresh()
@@ -1166,6 +1213,8 @@ class ScheduleTab(QWidget):
         self.steps.setCurrentIndex(1)
 
     def refresh(self, select=None):
+        if hasattr(self, "admins_label"):
+            self.refresh_admins()
         rows = self.db.schedule_versions()
         self.versions.blockSignals(True)
         self.versions.setRowCount(len(rows))
@@ -1293,10 +1342,12 @@ class DutyTab(QWidget):
         self.months.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.months.setSelectionMode(QAbstractItemView.SingleSelection)
         self.months.itemSelectionChanged.connect(self._show)
-        load = variant(QPushButton("📄  Nöbet çizelgesi yükle (PDF / Excel)"), "primary")
+        auto = variant(QPushButton("⚙  Nöbetmatik ile yeni çizelge oluştur"), "primary")
+        auto.clicked.connect(lambda: self.open_nobetmatik())
+        load = QPushButton("📄  PDF / Excel'den yükle")
         load.clicked.connect(self.load_file)
-        manual = QPushButton("Elle oluştur / düzenle")
-        manual.clicked.connect(self.edit)
+        prt = QPushButton("🖨  Yazdır")
+        prt.clicked.connect(self.print_month)
         rem = variant(QPushButton("Seçili ayı sil"), "danger")
         rem.clicked.connect(self.delete)
 
@@ -1309,24 +1360,26 @@ class DutyTab(QWidget):
         self.dated.setWordWrap(True)
 
         # Kademe 1: yüklü aylar
-        view = QPushButton("👁  Çizelgeyi görüntüle")
+        view = QPushButton("👁  Görüntüle")
         view.clicked.connect(self.open_view)
-        for b in (load, view, manual, rem):
+        for b in (auto, load, view, prt, rem):
             b.setMinimumHeight(46)
-        load.setStyleSheet("font-size:11pt")
+        auto.setStyleSheet("font-size:11pt")
         self.months.setMinimumHeight(130)
         card1 = QGroupBox("Yüklü nöbet çizelgeleri")
         c1 = QVBoxLayout(card1)
-        hint = QLabel("Her ay o ayın çizelgesini yükleyin. Haftalara bölünmüş çizelgeler de okunur.")
+        hint = QLabel("Her ay <b>Nöbetmatik</b> ile o ayın çizelgesini oluşturun (ya da hazır "
+                      "çizelgeyi PDF/Excel'den yükleyin). Görevlendirme bu çizelgeyi kullanır.")
         hint.setWordWrap(True)
         c1.addWidget(hint)
-        c1.addWidget(self.months, 1)
+        c1.addWidget(auto)
         bh = QHBoxLayout()
         bh.addWidget(load, 1)
         bh.addWidget(view, 1)
-        bh.addWidget(manual)
+        bh.addWidget(prt, 1)
         bh.addWidget(rem)
         c1.addLayout(bh)
+        c1.addWidget(self.months, 1)
         p1 = QWidget()
         v1 = QVBoxLayout(p1)
         v1.setContentsMargins(0, 0, 0, 0)
@@ -1348,16 +1401,57 @@ class DutyTab(QWidget):
         v2.addWidget(self.table, 1)
         v2.addWidget(self.dated)
 
+        from .ui_nobetmatik import NobetmatikPage
+        self.matik = NobetmatikPage(win, self._matik_done, lambda: self.steps.setCurrentIndex(0))
         self.steps = QStackedWidget()
         self.steps.addWidget(p1)
         self.steps.addWidget(p2)
+        self.steps.addWidget(self.matik)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(page_header("2  Nöbet Çizelgesi",
-                                "Her ay o ayın çizelgesini yükleyin. İsimler ders programındaki "
-                                "öğretmenlerle otomatik eşleştirilir."))
+        v.addWidget(page_header("2  Nöbetmatik",
+                                "Ders programındaki öğretmenlerden her ay adil bir nöbet çizelgesi "
+                                "oluşturun; görevlendirme bu çizelgeyi kullanır."))
         v.addWidget(self.steps, 1)
         self.refresh()
+
+    def open_nobetmatik(self, month=None):
+        if not self.db.schedule_versions():
+            _info(self, "Önce 1. adımda ders programını yükleyin; Nöbetmatik öğretmenleri ve "
+                        "derslerini oradan alır.")
+            return
+        self.win.tabs.setCurrentWidget(self)
+        self.matik.start(month or dt.date.today().strftime("%Y-%m"))
+        self.steps.setCurrentIndex(2)
+
+    def _matik_done(self, month):
+        self.steps.setCurrentIndex(0)
+        self.refresh(select=month)
+        self.win.changed()
+        self.win.next_step(f"{export.month_tr(month)} nöbet çizelgesi kaydedildi.")
+
+    def _month_entries(self, m):
+        """Ayın nöbetlerini tarihli olarak verir (gün bazlı çizelgeler her haftaya yayılır)."""
+        from .nobetmatik import month_weeks
+        out = []
+        dates = [d for _mon, ds in month_weeks(m) for d in ds]
+        for wd, date, t, p in self.db.duty_rows(m):
+            if date:
+                out.append(DutyEntry(wd, t, p, date))
+            else:
+                out += [DutyEntry(wd, t, p, d.isoformat()) for d in dates if d.weekday() == wd]
+        return out
+
+    def print_month(self):
+        m = self.month()
+        if not m:
+            _info(self, "Yazdırılacak çizelge yok.")
+            return
+        from .ui_nobetmatik import print_duty
+        cfg = self.db.nobetmatik_config()
+        exempt = cfg.get("exempt") if cfg.get("month") == m else None
+        places = [p for p, _n in cfg.get("places", [])] if cfg.get("month") == m else None
+        print_duty(self, self.win, m, self._month_entries(m), exempt, places)
 
     def open_view(self):
         if not self.month():
@@ -1436,13 +1530,6 @@ class DutyTab(QWidget):
         if dlg.exec() == QDialog.Accepted:
             self._save(dlg)
 
-    def edit(self):
-        m = self.month() or dt.date.today().strftime("%Y-%m")
-        entries = [DutyEntry(wd, t, p, d) for wd, d, t, p in self.db.duty_rows(m)]
-        dlg = DutyEditDialog(self, entries, self._teachers(), m)
-        if dlg.exec() == QDialog.Accepted:
-            self._save(dlg)
-
     def _save(self, dlg):
         m = dlg.month_key()
         if m in [r[0] for r in self.db.duty_months()] and m != self.month() and \
@@ -1462,32 +1549,52 @@ class DutyTab(QWidget):
 
 
 class ReportTab(QWidget):
+    """Ay ve eğitim yılı bazında kimin kaç derse girdiğini açıkça gösterir."""
+
     def __init__(self, win):
         super().__init__()
         self.win, self.db = win, win.db
         self.month = MonthPicker()
         self.month.changed.connect(self.refresh)
+        self.only_duty = QCheckBox("Yalnızca o ay nöbetçi olanlar")
+        self.only_duty.setChecked(True)
+        self.only_duty.toggled.connect(self.refresh)
         xlsx = QPushButton("Excel'e aktar")
         xlsx.clicked.connect(self.to_excel)
         top = QHBoxLayout()
         top.addWidget(QLabel("<b>Ay:</b>"))
         top.addWidget(self.month)
+        top.addSpacing(12)
+        top.addWidget(self.only_duty)
         top.addStretch()
         top.addWidget(xlsx)
+        self.cards = [theme.StatCard("bu ay doldurulan ders", theme.ACCENT),
+                      theme.StatCard("eğitim yılı toplamı", "#059669"),
+                      theme.StatCard("yılda en çok giren", "#d97706"),
+                      theme.StatCard("sıradaki öncelikli (en az giren)", "#2563eb")]
+        ch = QHBoxLayout()
+        for c in self.cards:
+            ch.addWidget(c)
         self.table = QTableWidget(0, len(export.REPORT_HEADERS))
         self.table.setHorizontalHeaderLabels(export.REPORT_HEADERS)
         _stretch(self.table, 0)
+        self.table.horizontalHeader().setMinimumSectionSize(70)
+        self.table.verticalHeader().hide()
         self.table.setSortingEnabled(True)
-        self.info = QLabel()
-        self.info.setWordWrap(True)
+        self.table.setMinimumHeight(200)
+        explain = QLabel("<b>Nasıl okunur?</b> <i>Bu ay derse girdi</i>: seçilen ayda gelmeyen "
+                         "öğretmenin yerine kaç derse girdiği. <i>Eğitim yılı toplamı</i>: Eylül'den "
+                         "bu yana toplam — program adaleti bu sayıya göre sağlar, en az girene "
+                         "öncelik verir. Ay değişince sayılar sıfırlanmaz.")
+        explain.setWordWrap(True)
+        explain.setObjectName("subtitle")
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(page_header("Aylık Rapor",
-                                "Kaydedilen günlerdeki görevlendirmeler sayılır. Program, nöbetçiler "
-                                "arasında bu ay en az derse girene öncelik vererek sayıları eşitler."))
+        v.addWidget(page_header("Aylık Rapor"))
         v.addLayout(top)
+        v.addLayout(ch)
+        v.addWidget(explain)
         v.addWidget(self.table, 1)
-        v.addWidget(self.info)
         self.rows = []
 
     def key(self):
@@ -1495,29 +1602,43 @@ class ReportTab(QWidget):
 
     def refresh(self):
         m = self.key()
-        self.rows = export.report_rows(self.db.counts(m), self.db.duty_days_in_month(m))
+        last = max(self.db.saved_dates(m) or [m + "-28"])
+        year = self.db.year_counts(last)
+        rows = export.report_rows(self.db.counts(m), year, self.db.duty_days_in_month(m))
+        if self.only_duty.isChecked():
+            rows = [r for r in rows if r[1] or r[2]]
+        self.rows = rows
         self.table.setSortingEnabled(False)
-        self.table.setRowCount(len(self.rows))
-        for r, row in enumerate(self.rows):
+        self.table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
             for c, val in enumerate(row):
                 it = QTableWidgetItem()
                 it.setData(Qt.DisplayRole, val)
                 it.setFlags(it.flags() & ~Qt.ItemIsEditable)
-                if c == 4 and val:
-                    it.setBackground(YELLOW)
+                if c == 6:
+                    if val.startswith("Az"):
+                        it.setBackground(GREEN)
+                    elif val.startswith("Çok"):
+                        it.setBackground(YELLOW)
                 self.table.setItem(r, c, it)
         self.table.setSortingEnabled(True)
-        days = self.db.saved_dates(m)
-        duty_counts = [row[3] for row in self.rows if row[1]]
-        spread = (max(duty_counts) - min(duty_counts)) if duty_counts else 0
-        self.info.setText(f"Kayıtlı gün sayısı: {len(days)}. Nöbetçiler arasındaki fark "
-                          f"(en çok − en az): {spread}.")
+        duty_rows = [r for r in rows if r[1]]
+        self.cards[0].set(sum(r[2] for r in rows))
+        self.cards[1].set(sum(r[3] for r in rows))
+        if duty_rows and any(r[3] for r in duty_rows):
+            top = max(duty_rows, key=lambda r: r[3])
+            low = min(duty_rows, key=lambda r: r[3])
+            self.cards[2].set(f"{top[0].split()[0]} ({top[3]})")
+            self.cards[3].set(f"{low[0].split()[0]} ({low[3]})")
+        else:
+            self.cards[2].set("—")
+            self.cards[3].set("—")
 
     def to_excel(self):
         path, _ = QFileDialog.getSaveFileName(self, "Excel olarak kaydet",
                                               f"aylik_rapor_{self.key()}.xlsx", "Excel (*.xlsx)")
         if path:
-            export.save_report_xlsx(path, self.key(), self.rows, self.win.school())
+            export.save_report_xlsx(path, self.key(), self.rows, self.win.school_header())
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
 
@@ -1606,8 +1727,26 @@ class SettingsTab(QWidget):
         self.dark.setChecked(self.db.get_setting("theme_dark", "0") == "1")
         self.accent.currentTextChanged.connect(self._theme_changed)
         self.dark.toggled.connect(self._theme_changed)
-        gt, lt = card("Görünüm")
-        lt.addLayout(row(QLabel("Tema rengi:"), self.accent, self.dark, stretch_first=False))
+        self.font_size = QComboBox()
+        self.font_size.addItems(list(theme.FONT_SIZES))
+        self.font_size.setCurrentText(self.db.get_setting("theme_font", "Normal"))
+        self.font_size.setFixedWidth(180)
+        self.font_size.currentTextChanged.connect(self._theme_changed)
+        self.density = QComboBox()
+        self.density.addItems(list(theme.DENSITIES))
+        self.density.setCurrentText(self.db.get_setting("theme_density", "Normal"))
+        self.density.setFixedWidth(180)
+        self.density.currentTextChanged.connect(self._theme_changed)
+        gt, lt = card("Görünüm (tasarım)")
+        ft = QFormLayout()
+        ft.addRow("Tema rengi:", self.accent)
+        ft.addRow("Yazı boyutu:", self.font_size)
+        ft.addRow("Satır aralığı:", self.density)
+        ft.addRow("", self.dark)
+        lt.addLayout(ft)
+        note = QLabel("Yazı boyutu ve satır aralığı tablolara sayfa yenilenince uygulanır.")
+        note.setObjectName("subtitle")
+        lt.addWidget(note)
 
         # Dağıtım
         self.cap = QSpinBox()
@@ -1617,25 +1756,29 @@ class SettingsTab(QWidget):
         self.cap.setValue(int(self.db.get_setting("max_per_day", "0") or 0))
         self.cap.valueChanged.connect(lambda v: self.db.set_setting("max_per_day", v))
         g1, l1 = card("Dağıtım kuralları")
-        rules = QLabel("Önce o saatte dersi olmayan <b>nöbetçi öğretmenler</b>, bu ay en az derse "
-                       "girene öncelik verilerek görevlendirilir. Boş nöbetçi yoksa o saatte dersi "
+        rules = QLabel("Önce o saatte dersi olmayan <b>nöbetçi öğretmenler</b>, bu eğitim yılında en "
+                       "az derse girene öncelik verilerek görevlendirilir. Boş nöbetçi yoksa o saatte dersi "
                        "olmayan <b>diğer öğretmenler</b> görevlendirilir. İdareciler otomatik "
                        "görevlendirilmez; sonuç ekranında elle seçilebilir.")
         rules.setWordWrap(True)
         l1.addWidget(rules)
         l1.addLayout(row(QLabel("Bir nöbetçiye günde en fazla:"), self.cap, stretch_first=False))
 
-        # İdareciler
-        self.admins_label = QLabel()
-        self.admins_label.setWordWrap(True)
-        edit_admins = QPushButton("İdarecileri düzenle…")
-        edit_admins.clicked.connect(self.edit_admins)
-        ga, la = card("İdareciler (otomatik görevlendirilmez, elle seçilebilir)")
-        ha = QHBoxLayout()
-        ha.addWidget(self.admins_label, 1)
-        ha.addWidget(edit_admins, 0, Qt.AlignTop)
-        la.addLayout(ha)
-        self.refresh_admins()
+        # Yeni ay
+        self.month_alert = QCheckBox("Yeni ay başlayınca uyar ve Nöbetmatik'i açmayı öner")
+        self.month_alert.setChecked(self.db.get_setting("month_alert", "1") == "1")
+        self.month_alert.toggled.connect(
+            lambda v: self.db.set_setting("month_alert", "1" if v else "0"))
+        new_month = QPushButton("⚙  Yeni ayı şimdi başlat (Nöbetmatik)")
+        new_month.clicked.connect(lambda: win.duty.open_nobetmatik())
+        gm, lm = card("Yeni ay")
+        mhint = QLabel("Program tarihi kontrol eder; yeni bir aya geçildiğinde o ayın nöbet "
+                       "çizelgesini oluşturmanızı ister. İstatistikler eğitim-öğretim yılı boyunca "
+                       "(Eylül–Ağustos) birikir, ay değişince sıfırlanmaz.")
+        mhint.setWordWrap(True)
+        lm.addWidget(mhint)
+        lm.addWidget(self.month_alert)
+        lm.addLayout(row(new_month, stretch_first=False))
 
         # Excel
         g4, l4 = card("Excel kayıt dosyası")
@@ -1690,23 +1833,9 @@ class SettingsTab(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(12)
         v.addWidget(page_header("Ayarlar"))
-        for g in (g0, gt, g1, ga, g4, g2, g3):
+        for g in (g0, gm, gt, g1, g4, g2, g3):
             v.addWidget(g)
         v.addStretch()
-
-    def refresh_admins(self):
-        admins = sorted(self.db.admins(), key=normalize)
-        self.admins_label.setText(", ".join(admins) if admins else
-                                  "Henüz yok. Okul müdürü, müdür yardımcıları ve nöbet "
-                                  "çizelgesinde idareci olarak geçenler otomatik eklenir.")
-
-    def edit_admins(self):
-        dlg = AdminsDialog(self, self.db.all_teachers(), self.db.admins())
-        if dlg.exec() == QDialog.Accepted:
-            self.db.set_admins(dlg.selected())
-            self.db.set_setting("admins_confirmed", "1")
-            self.refresh_admins()
-            self.win.changed()
 
     def reset(self):
         if not _ask(self, "Ders programı, nöbet çizelgeleri ve TÜM görevlendirme kayıtları "
@@ -1714,7 +1843,6 @@ class SettingsTab(QWidget):
                           "isteyebilirsiniz. Silmek istediğinize emin misiniz?", "Sıfırdan başla"):
             return
         self.db.reset_all()
-        self.refresh_admins()
         self.win.sched.refresh()
         self.win.duty.refresh()
         self.win.changed()
@@ -1737,8 +1865,10 @@ class SettingsTab(QWidget):
     def _theme_changed(self, *_):
         self.db.set_setting("theme_accent", self.accent.currentText())
         self.db.set_setting("theme_dark", "1" if self.dark.isChecked() else "0")
-        QApplication.instance().setStyleSheet(
-            theme.build_style(self.accent.currentText(), self.dark.isChecked()))
+        self.db.set_setting("theme_font", self.font_size.currentText())
+        self.db.set_setting("theme_density", self.density.currentText())
+        theme.apply(QApplication.instance(), self.accent.currentText(), self.dark.isChecked(),
+                    self.font_size.currentText(), self.density.currentText())
         self.win.daily.refresh()
 
     def open_excel(self):
@@ -1780,8 +1910,14 @@ class MainWindow(QMainWindow):
         self.resize(1440, 860)
         self.db = db or Database()
         self._workers = []
+        if os.path.exists(logo_path()) and self.db.get_setting("logo_round") != "1":
+            round_logo(QImage(logo_path())).save(logo_path())  # eski kare logoları yuvarlat
+            self.db.set_setting("logo_round", "1")
         self._build()
         QTimer.singleShot(800, self.check_new_month)
+        self._month_timer = QTimer(self)  # program açık kalırsa ay değişimini de yakala
+        self._month_timer.timeout.connect(self.check_new_month)
+        self._month_timer.start(60 * 60 * 1000)
         if self.db.get_setting("auto_update", "1") == "1" and updater.can_self_update():
             QTimer.singleShot(2500, lambda: self.check_updates(silent=True))
 
@@ -1795,7 +1931,7 @@ class MainWindow(QMainWindow):
         self.settings = SettingsTab(self)
         # Sıra: önce ders programı, sonra nöbet çizelgesi, sonra görevlendirme
         self.tabs.addTab(self.sched, "1   Ders Programı")
-        self.tabs.addTab(self.duty, "2   Nöbet Çizelgesi")
+        self.tabs.addTab(self.duty, "2   Nöbetmatik")
         self.tabs.addTab(self.daily, "3   Görevlendirme")
         self.tabs.addTab(self.report, "📊   Aylık Rapor")
         self.tabs.addTab(self.settings, "⚙   Ayarlar")
@@ -1825,7 +1961,7 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             self.db.set_admins(dlg.selected())
             self.db.set_setting("admins_confirmed", "1")
-            self.settings.refresh_admins()
+            self.sched.refresh_admins()
             self.daily.refresh()
 
     def next_step(self, done):
@@ -1839,33 +1975,35 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"✅ {done} Artık görevlendirme yapabilirsiniz.", 8000)
             self.tabs.setCurrentWidget(self.daily)
 
-    def check_new_month(self):
-        """Ay değiştiyse yeni nöbet çizelgesini (ve değiştiyse ders programını) ister."""
-        if not self.db.schedule_versions() or not self.db.duty_months():
+    def check_new_month(self, force=False):
+        """Yeni ay başladıysa (program açıkken de) uyarır ve Nöbetmatik'i açmayı önerir."""
+        if not force and self.db.get_setting("month_alert", "1") != "1":
+            return
+        if not self.db.schedule_versions():
             return  # ilk kurulum: zaten adım adım yönlendiriliyor
         month = dt.date.today().strftime("%Y-%m")
-        if month in [m for m, _n in self.db.duty_months()]:
+        if not force and month in [m for m, _n in self.db.duty_months()]:
             return
+        if not force and self.db.get_setting("month_alert_shown") == month and \
+                getattr(self, "_alerted", None) == month:
+            return
+        self._alerted = month
+        self.db.set_setting("month_alert_shown", month)
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Information)
         box.setWindowTitle("Yeni ay")
-        box.setText(f"<b>{export.month_tr(month)}</b> başladı.<br><br>Bu ayın <b>nöbet "
-                    "çizelgesini</b> yükleyin. Ders programı değiştiyse yeni <b>ders "
-                    "programını</b> da yükleyin.")
-        duty_b = box.addButton("Nöbet çizelgesini yükle", QMessageBox.AcceptRole)
-        sched_b = box.addButton("Ders programını yükle", QMessageBox.ActionRole)
+        box.setText(f"<b>{export.month_tr(month)}</b> başladı.<br><br>Bu ay için yeni nöbet "
+                    "çizelgesi gerekiyor. Ders programı değiştiyse önce yeni ders programını "
+                    "yükleyin, sonra Nöbetmatik ile bu ayın nöbetlerini dağıtın.")
+        matik_b = box.addButton("⚙  Nöbetmatik'i aç", QMessageBox.AcceptRole)
+        sched_b = box.addButton("Ders programını güncelle", QMessageBox.ActionRole)
         box.addButton("Sonra", QMessageBox.RejectRole)
         box.exec()
-        if box.clickedButton() is duty_b:
-            self.tabs.setCurrentWidget(self.duty)
-            self.duty.load_file()
+        if box.clickedButton() is matik_b:
+            self.duty.open_nobetmatik(month)
         elif box.clickedButton() is sched_b:
             self.tabs.setCurrentWidget(self.sched)
             self.sched.load_file()
-
-    def reopen_db(self):
-        self.db = Database(self.db.path)
-        self._build()
 
     def school(self):
         return self.db.get_setting("school", "")
@@ -1933,7 +2071,6 @@ class MainWindow(QMainWindow):
             self.sched.refresh(select=self.sched.version)
         elif w is self.settings:
             self.settings.refresh_school()
-            self.settings.refresh_admins()
 
     # ---- güncelleme ----
     def _start(self, worker, done, failed=None):
@@ -2016,7 +2153,8 @@ def run():
     app = QApplication(sys.argv)
     app.setApplicationName("Nöbetçi Öğretmen Görevlendirme")
     db = Database()
-    theme.apply(app, db.get_setting("theme_accent", "Mor"), db.get_setting("theme_dark", "0") == "1")
+    theme.apply(app, db.get_setting("theme_accent", "Mor"), db.get_setting("theme_dark", "0") == "1",
+                db.get_setting("theme_font", "Normal"), db.get_setting("theme_density", "Normal"))
     win = MainWindow(db)
     win.showMaximized()
     sys.exit(app.exec())

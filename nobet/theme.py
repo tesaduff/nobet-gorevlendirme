@@ -2,7 +2,7 @@
 import os
 import sys
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
@@ -56,7 +56,7 @@ def build_style(accent="Mor", dark=False):
 
 
 STYLE = """
-QWidget {{ color: {TEXT}; font-size: 10pt; }}
+QWidget {{ color: {TEXT}; }}
 QMainWindow, QDialog, #page, QScrollArea#page > QWidget > QWidget {{ background: {BG}; }}
 QToolTip {{ background: {TEXT}; color: white; border: none; padding: 6px; border-radius: 4px; }}
 
@@ -144,15 +144,24 @@ QListWidget#nav::item:selected {{ background: {a}; color: white; font-weight: 60
 
 /* Sayfa başlıkları ve özet kutucukları */
 QLabel#title {{ font-size: 17pt; font-weight: 700; color: {TEXT}; }}
-QLabel#subtitle {{ color: {MUTED}; font-size: 10pt; }}
+QLabel#subtitle {{ color: {MUTED}; }}
 QFrame#stat {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 12px; }}
 QLabel#statValue {{ font-size: 20pt; font-weight: 700; }}
 QLabel#statLabel {{ color: {MUTED}; font-size: 9pt; }}
 """
 
 
-def apply(app, accent="Mor", dark=False):
-    font = QFont("Segoe UI", 10)
+FONT_SIZES = {"Küçük": 9, "Normal": 10, "Büyük": 11, "Çok büyük": 12.5}
+DENSITIES = {"Sıkı": 30, "Normal": 36, "Rahat": 44}
+ROW_HEIGHT = 36
+
+
+def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal"):
+    global ROW_HEIGHT
+    size = FONT_SIZES.get(font_size, 10)
+    ROW_HEIGHT = int(DENSITIES.get(density, 36) * size / 10)
+    font = QFont("Segoe UI")
+    font.setPointSizeF(size)
     font.setStyleHint(QFont.SansSerif)
     app.setFont(font)
     app.setStyle("Fusion")
@@ -303,7 +312,9 @@ class NavPages(QWidget):
         scroll.setWidget(page)
         self._widgets = getattr(self, "_widgets", []) + [widget]
         self.stack.addWidget(scroll)
-        self.nav.addItem(QListWidgetItem(label))
+        item = QListWidgetItem(label)
+        item.setSizeHint(QSize(0, int(ROW_HEIGHT * 1.25)))
+        self.nav.addItem(item)
         if self.nav.count() == 1:
             self.nav.setCurrentRow(0)
 

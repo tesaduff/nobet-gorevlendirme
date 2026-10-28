@@ -36,7 +36,7 @@ def teachers_with_lessons(schedule, weekday):
 
 
 def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per_day=0,
-             excluded=()):
+             excluded=(), year_counts=None):
     """Günün görevlendirmesini hesaplar.
 
     schedule: {öğretmen: {(gün, saat): bilgi}}
@@ -50,6 +50,7 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         listesinde "idareci" etiketiyle yer alır.
     """
     excluded = set(excluded)
+    year_counts = year_counts or {}  # eğitim yılı toplamı: adalette önce buna bakılır
     weekday = dt.date.fromisoformat(date).weekday()
     duty_names = []
     for t, _ in duty:
@@ -73,7 +74,8 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         return month_counts.get(t, (0, 0, 0))[0]
 
     def fairness(t):
-        return (month_total(t), today.get(t, 0), total_counts.get(t, 0), t)
+        return (year_counts.get(t, (0,))[0], month_total(t), today.get(t, 0),
+                total_counts.get(t, 0), t)
 
     def window(t, h):
         hs = busy.get(t, set())

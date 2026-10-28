@@ -291,3 +291,45 @@ class Database:
         for key in ("admins_extra", "admins_removed", "admins_confirmed"):
             self.conn.execute("DELETE FROM settings WHERE key=?", (key,))
         self.conn.commit()
+
+    # ---- eğitim-öğretim yılı (Eylül–Ağustos) istatistikleri
+    @staticmethod
+    def school_year_start(date):
+        d = dt.date.fromisoformat(date[:10])
+        year = d.year if d.month >= 9 else d.year - 1
+        return f"{year}-09-01"
+
+    def year_counts(self, date, exclude_date=None):
+        """Eğitim yılı başından bu güne kadar ders doldurma sayıları:
+        {öğretmen: (toplam, nöbetçi olarak, nöbetçi değilken)}."""
+        start = self.school_year_start(date)
+        rows = self.conn.execute(
+            "SELECT assigned, kind, COUNT(*) FROM assignments WHERE date >= ? AND date <= ? "
+            "AND assigned IS NOT NULL AND date != ? GROUP BY assigned, kind",
+            (start, date, exclude_date or "")).fetchall()
+        out = {}
+        for t, kind, n in rows:
+            tot, duty, free = out.get(t, (0, 0, 0))
+            out[t] = (tot + n, duty + (n if kind == "nobetci" else 0),
+                      free + (n if kind == "bos" else 0))
+        return out
+
+    def duty_history(self, month):
+        """Bu eğitim yılında, verilen aydan önceki aylarda tutulan nöbet günü sayısı."""
+        start = self.school_year_start(month + "-01")[:7]
+        out = {}
+        for m, _n in self.duty_months():
+            if not (start <= m < month):
+                continue
+            for t, n in self.duty_days_in_month(m).items():
+                out[t] = out.get(t, 0) + n
+        return out
+
+    # ---- Nöbetmatik ayarları (son kullanılan)
+    def nobetmatik_config(self):
+        import json
+        return json.loads(self.get_setting("nobetmatik", "{}") or "{}")
+
+    def save_nobetmatik_config(self, cfg_dict):
+        import json
+        self.set_setting("nobetmatik", json.dumps(cfg_dict, ensure_ascii=False))

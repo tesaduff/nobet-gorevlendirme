@@ -20,50 +20,60 @@ def draw(size=512):
     p.setRenderHint(QPainter.Antialiasing)
     s = size / 512
 
-    # Zemin: yuvarlak köşeli kare, indigo -> mor geçiş
+    # Zemin: yuvarlak köşeli kare, mavi -> turkuaz
     g = QLinearGradient(0, 0, size, size)
-    g.setColorAt(0, QColor("#4f46e5"))
-    g.setColorAt(1, QColor("#7c3aed"))
+    g.setColorAt(0, QColor("#2563eb"))
+    g.setColorAt(1, QColor("#0d9488"))
     p.setPen(Qt.NoPen)
     p.setBrush(QBrush(g))
-    p.drawRoundedRect(QRectF(16 * s, 16 * s, 480 * s, 480 * s), 108 * s, 108 * s)
+    p.drawRoundedRect(QRectF(16 * s, 16 * s, 480 * s, 480 * s), 112 * s, 112 * s)
 
-    # Kalkan
-    shield = QPainterPath()
-    shield.moveTo(256 * s, 86 * s)
-    shield.cubicTo(310 * s, 120 * s, 360 * s, 128 * s, 400 * s, 128 * s)
-    shield.lineTo(400 * s, 250 * s)
-    shield.cubicTo(400 * s, 340 * s, 340 * s, 400 * s, 256 * s, 438 * s)
-    shield.cubicTo(172 * s, 400 * s, 112 * s, 340 * s, 112 * s, 250 * s)
-    shield.lineTo(112 * s, 128 * s)
-    shield.cubicTo(152 * s, 128 * s, 202 * s, 120 * s, 256 * s, 86 * s)
-    shield.closeSubpath()
+    # Pano
+    p.setBrush(QColor(0, 0, 0, 40))
+    p.drawRoundedRect(QRectF(120 * s, 104 * s, 272 * s, 328 * s), 34 * s, 34 * s)
     p.setBrush(QColor("white"))
-    p.drawPath(shield)
+    p.drawRoundedRect(QRectF(112 * s, 94 * s, 272 * s, 328 * s), 34 * s, 34 * s)
+    # Kıskaç
+    p.setBrush(QColor("#1e3a8a"))
+    p.drawRoundedRect(QRectF(184 * s, 70 * s, 128 * s, 54 * s), 22 * s, 22 * s)
+    p.setBrush(QColor("white"))
+    p.drawEllipse(QRectF(236 * s, 82 * s, 24 * s, 24 * s))
 
-    # Onay işareti
-    pen = QPen(QColor("#4f46e5"), 40 * s, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-    p.setPen(pen)
-    p.setBrush(Qt.NoBrush)
-    check = QPainterPath()
-    check.moveTo(QPointF(186 * s, 262 * s))
-    check.lineTo(QPointF(238 * s, 314 * s))
-    check.lineTo(QPointF(330 * s, 212 * s))
-    p.drawPath(check)
+    # Liste: 3 satır, ilk ikisi onaylı
+    for i, done in enumerate((True, True, False)):
+        y = (172 + i * 78) * s
+        box = QRectF(146 * s, y, 50 * s, 50 * s)
+        if done:
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor("#10b981"))
+            p.drawRoundedRect(box, 12 * s, 12 * s)
+            pen = QPen(QColor("white"), 11 * s, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            p.setPen(pen)
+            p.setBrush(Qt.NoBrush)
+            path = QPainterPath()
+            path.moveTo(QPointF(158 * s, y + 26 * s))
+            path.lineTo(QPointF(168 * s, y + 36 * s))
+            path.lineTo(QPointF(186 * s, y + 14 * s))
+            p.drawPath(path)
+        else:
+            p.setPen(QPen(QColor("#94a3b8"), 7 * s))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(box, 12 * s, 12 * s)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor("#cbd5e1") if done else QColor("#e2e8f0"))
+        p.drawRoundedRect(QRectF(214 * s, y + 10 * s, 136 * s, 14 * s), 7 * s, 7 * s)
+        p.drawRoundedRect(QRectF(214 * s, y + 32 * s, 92 * s, 12 * s), 6 * s, 6 * s)
 
-    # Küçük takvim rozeti (sağ alt)
+    # Saat rozeti (sağ alt)
     p.setPen(Qt.NoPen)
     p.setBrush(QColor("#f59e0b"))
-    p.drawRoundedRect(QRectF(336 * s, 336 * s, 128 * s, 128 * s), 26 * s, 26 * s)
+    p.drawEllipse(QRectF(318 * s, 318 * s, 150 * s, 150 * s))
     p.setBrush(QColor("white"))
-    p.drawRoundedRect(QRectF(356 * s, 372 * s, 88 * s, 72 * s), 10 * s, 10 * s)
-    p.setBrush(QColor("#f59e0b"))
-    for i in range(3):
-        for j in range(2):
-            p.drawRect(QRectF((368 + i * 26) * s, (386 + j * 26) * s, 14 * s, 14 * s))
-    p.setBrush(QColor("white"))
-    for x in (376, 424):
-        p.drawRoundedRect(QRectF((x - 5) * s, 352 * s, 10 * s, 28 * s), 5 * s, 5 * s)
+    p.drawEllipse(QRectF(340 * s, 340 * s, 106 * s, 106 * s))
+    pen = QPen(QColor("#b45309"), 12 * s, Qt.SolidLine, Qt.RoundCap)
+    p.setPen(pen)
+    p.drawLine(QPointF(393 * s, 393 * s), QPointF(393 * s, 357 * s))
+    p.drawLine(QPointF(393 * s, 393 * s), QPointF(420 * s, 408 * s))
     p.end()
     return img
 
