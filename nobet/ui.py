@@ -102,12 +102,30 @@ def _iso(qdate):
     return qdate.toString("yyyy-MM-dd")
 
 
+def _message(parent, icon, title, text, buttons):
+    """Türkçe düğmeli ileti kutusu; basılan düğmenin sırasını döner."""
+    box = QMessageBox(icon, title, text, QMessageBox.NoButton, parent)
+    made = []
+    for label, role in buttons:
+        made.append(box.addButton(label, role))
+    box.setDefaultButton(made[0])
+    box.exec()
+    clicked = box.clickedButton()
+    box.deleteLater()
+    return made.index(clicked) if clicked in made else len(made) - 1
+
+
 def _info(parent, text, title="Bilgi"):
-    QMessageBox.information(parent, title, text)
+    _message(parent, QMessageBox.Information, title, text, [("Tamam", QMessageBox.AcceptRole)])
+
+
+def _warn(parent, title, text):
+    _message(parent, QMessageBox.Warning, title, text, [("Tamam", QMessageBox.AcceptRole)])
 
 
 def _ask(parent, text, title="Onay"):
-    return QMessageBox.question(parent, title, text) == QMessageBox.Yes
+    return _message(parent, QMessageBox.Question, title, text,
+                    [("Evet", QMessageBox.YesRole), ("Hayır", QMessageBox.NoRole)]) == 0
 
 
 class ChoiceButton(QPushButton):
@@ -1152,7 +1170,14 @@ class DailyTab(QWidget):
         combo = self.people.cellWidget(row, 2)
         if combo.currentText() == OTHER:
             name = self.people.item(row, 0).text()
-            text, ok = QInputDialog.getText(self, "Mazeret", f"{name} için mazereti yazın:")
+            dlg = QInputDialog(self)
+            dlg.setWindowTitle("Mazeret")
+            dlg.setLabelText(f"{name} için mazereti yazın:")
+            dlg.setOkButtonText("Tamam")
+            dlg.setCancelButtonText("Vazgeç")
+            ok = dlg.exec() == QDialog.Accepted
+            text = dlg.textValue()
+            dlg.deleteLater()
             text = text.strip()
             combo.blockSignals(True)
             if ok and text:
@@ -1623,12 +1648,12 @@ class ScheduleTab(QWidget):
         try:
             res = parse_schedule(read_document(path), self.db.all_teachers())
         except ReadError as e:
-            QMessageBox.warning(self, "Okunamadı", str(e))
+            _warn(self, "Okunamadı", str(e))
             return
         finally:
             QApplication.restoreOverrideCursor()
         if not res.teachers:
-            QMessageBox.warning(self, "Program bulunamadı", "\n".join(res.warnings))
+            _warn(self, "Program bulunamadı", "\n".join(res.warnings))
             return
         dlg = ScheduleReviewDialog(self, res, path, dt.date.today().isoformat())
         if run_dialog(dlg):
@@ -1660,6 +1685,8 @@ class ScheduleTab(QWidget):
         dlg.setWindowTitle(title)
         edit = QLineEdit(text)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Tamam")
+        bb.button(QDialogButtonBox.Cancel).setText("Vazgeç")
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)
         v = QVBoxLayout(dlg)
@@ -1923,7 +1950,7 @@ class DutyTab(QWidget):
         try:
             res = parse_duty(read_document(path), teachers)
         except ReadError as e:
-            QMessageBox.warning(self, "Okunamadı", str(e))
+            _warn(self, "Okunamadı", str(e))
             return
         finally:
             QApplication.restoreOverrideCursor()
@@ -2941,7 +2968,7 @@ class MainWindow(QMainWindow):
     def _start(self, worker, done, failed=None):
         self._workers.append(worker)
         worker.done.connect(done)
-        worker.failed.connect(failed or (lambda m: QMessageBox.warning(self, "Güncelleme", m)))
+        worker.failed.connect(failed or (lambda m: _warn(self, "Güncelleme", m)))
         worker.finished.connect(lambda: self._workers.remove(worker))
         worker.start()
 
@@ -3020,6 +3047,12 @@ def run():
     import sys
     QLocale.setDefault(QLocale(QLocale.Turkish, QLocale.Turkey))
     app = QApplication(sys.argv)
+    # Qt'nin kendi pencereleri (baskı önizleme, dosya seçme, sağ tık menüsü) Türkçe olsun
+    from PySide6.QtCore import QLibraryInfo, QTranslator
+    tr = QTranslator(app)
+    if tr.load(theme.resource("qtbase_tr.qm")) or \
+            tr.load("qtbase_tr", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
+        app.installTranslator(tr)
     app.setApplicationName(APP_NAME)
     db = Database()
     apply_saved_theme(app, db)

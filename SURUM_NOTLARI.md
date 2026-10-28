@@ -1,4 +1,9 @@
-Sürüm 2.1.2
+Sürüm 2.1.3
+
+- Bütün sorularda düğmeler Türkçe: Evet / Hayır, Tamam, Vazgeç (çıkış, silme, güncelleme vb.)
+- Programın kendi pencereleri de Türkçe (baskı önizleme, dosya seçme, sağ tık menüsü)
+
+Sürüm 2.1.2'deki yenilikler
 
 - Kayıtlar ekranı sadeleşti: solda günlerin listesi, sağda seçilen günün dersleri (saat, sınıf, ders, derse giren) ve Aç / Yazdır / Sil düğmeleri
 - Bütün tablolarda başlık ile altındaki yazı aynı hizada: adlar ve metinler sola, tarih / saat / sayılar ortaya hizalı
