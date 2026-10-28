@@ -1549,80 +1549,125 @@ class DutyTab(QWidget):
 
 
 class ReportTab(QWidget):
-    """Sade rapor: kim bu ay ve bu eğitim yılında kaç derse girdi."""
+    """Adalet raporu: herkese gösterildiğinde dağıtımın adil olduğu açıkça görülsün."""
+
+    HEADERS = ["Öğretmen", "Nöbet günü", "Derse girebileceği\nboş saat", "Nöbetçiyken\ngirdiği",
+               "Nöbetçi değilken\ngirdiği", "Toplam", ""]
 
     def __init__(self, win):
         super().__init__()
         self.win, self.db = win, win.db
+        self.period = QComboBox()
+        self.period.addItems(["Seçilen ay", "Eğitim yılı (Eylül'den bu yana)"])
+        self.period.setMinimumWidth(240)
+        self.period.currentIndexChanged.connect(self.refresh)
         self.month = MonthPicker()
         self.month.changed.connect(self.refresh)
+        prt = variant(QPushButton("🖨  Raporu yazdır"), "primary")
+        prt.clicked.connect(self.print_)
         xlsx = QPushButton("Excel'e aktar")
         xlsx.clicked.connect(self.to_excel)
         top = QHBoxLayout()
-        top.addWidget(QLabel("<b>Ay:</b>"))
+        top.addWidget(QLabel("<b>Dönem:</b>"))
+        top.addWidget(self.period)
         top.addWidget(self.month)
         top.addStretch()
+        top.addWidget(prt)
         top.addWidget(xlsx)
-        self.summary = QLabel()
-        self.summary.setWordWrap(True)
-        self.summary.setObjectName("card")
-        self.summary.setStyleSheet("padding:12px; font-size:11pt")
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Öğretmen", "Bu ay", "Bu yıl", ""])
+        self.verdict = QLabel()
+        self.verdict.setStyleSheet("font-size:14pt; font-weight:700")
+        self.verdict_text = QLabel()
+        self.verdict_text.setWordWrap(True)
+        card = QFrame()
+        card.setObjectName("card")
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(16, 10, 16, 10)
+        cl.addWidget(self.verdict)
+        cl.addWidget(self.verdict_text)
+        self.table = QTableWidget(0, len(self.HEADERS))
+        self.table.setHorizontalHeaderLabels(self.HEADERS)
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.Stretch)
-        h.setSectionResizeMode(1, QHeaderView.Fixed)
-        h.setSectionResizeMode(2, QHeaderView.Fixed)
-        h.setSectionResizeMode(3, QHeaderView.Stretch)
-        self.table.setColumnWidth(1, 80)
-        self.table.setColumnWidth(2, 80)
+        for c in range(1, 6):
+            h.setSectionResizeMode(c, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(6, QHeaderView.Stretch)
         self.table.verticalHeader().hide()
         self.table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
         self.table.setSelectionMode(QAbstractItemView.NoSelection)
         self.table.setFocusPolicy(Qt.NoFocus)
         self.table.setShowGrid(False)
-        self.table.setMinimumHeight(200)
-        note = QLabel("<b>Bu ay</b>: seçilen ayda gelmeyen öğretmenlerin yerine kaç derse girdi. "
-                      "<b>Bu yıl</b>: Eylül'den bu yana toplam. Program, yıl toplamı en az olan "
-                      "nöbetçiye öncelik verir; ay değişince sayılar sıfırlanmaz.")
-        note.setWordWrap(True)
-        note.setObjectName("subtitle")
+        self.table.setMinimumHeight(180)
+        rule = QLabel("<b>Kural:</b> Gelmeyen öğretmenin her dersi için, o saatte <b>kendi dersi "
+                      "olmayan</b> nöbetçiler arasından <b>bu yıl en az derse girmiş olan</b> seçilir; "
+                      "boş nöbetçi yoksa o saatte dersi olmayan diğer öğretmenlerden seçilir. "
+                      "<b>Derse girebileceği boş saat</b>: bir ders boşa düştüğünde öğretmenin o gün "
+                      "nöbetçi olup kendi dersinin olmadığı durum sayısı.")
+        rule.setWordWrap(True)
+        rule.setObjectName("subtitle")
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(page_header("Aylık Rapor"))
         v.addLayout(top)
-        v.addWidget(self.summary)
+        v.addWidget(card)
         v.addWidget(self.table, 1)
-        v.addWidget(note)
-        self.rows = []
+        v.addWidget(rule)
+        self.stats = {}
 
     def key(self):
         return self.month.key()
 
+    def _range(self):
+        m = self.key()
+        y, mo = (int(x) for x in m.split("-"))
+        import calendar
+        end = f"{m}-{calendar.monthrange(y, mo)[1]:02d}"
+        end = min(end, dt.date.today().isoformat()) if m <= dt.date.today().strftime("%Y-%m") else end
+        if self.period.currentIndex() == 1:
+            start = Database.school_year_start(end)
+            title = (f"{_qdate(start).toString('dd.MM.yyyy')} – "
+                     f"{_qdate(end).toString('dd.MM.yyyy')} (eğitim yılı)")
+        else:
+            start = f"{m}-01"
+            title = export.month_tr(m)
+        return start, end, title
+
     def refresh(self):
         from PySide6.QtWidgets import QProgressBar
-        m = self.key()
-        last = max(self.db.saved_dates(m) or [m + "-28"])
-        year = self.db.year_counts(last)
-        rows = export.report_rows(self.db.counts(m), year, self.db.duty_days_in_month(m))
-        rows = [r for r in rows if r[1] or r[2] or r[3]]
-        rows.sort(key=lambda r: (-r[3], -r[2], normalize(r[0])))
+        self.month.setEnabled(True)
+        start, end, title = self._range()
+        self.title = title
+        self.stats = self.db.fairness_stats(start, end)
+        rows = sorted(((t, v) for t, v in self.stats.items()
+                       if t != "__meta__" and (v["days"] or v["assigned"])),
+                      key=lambda x: (-x[1]["assigned"], normalize(x[0])))
         self.rows = rows
-        top = max((r[3] for r in rows), default=0) or 1
+        verdict, color, lines = export.fairness_summary(self.stats)
+        self.verdict.setText(f"{title}:  {verdict}")
+        self.verdict.setStyleSheet(f"font-size:14pt; font-weight:700; color:{color}")
+        total = sum(v["assigned"] for _t, v in rows)
+        self.verdict_text.setText(f"Bu dönemde gelmeyen öğretmenlerin <b>{total}</b> dersi "
+                                  "dolduruldu. " + " ".join(lines))
+        exc = self.stats.get("__meta__", {}).get("exceptions", [])
+        self.verdict_text.setToolTip("\n".join(f"{_qdate(d).toString('dd.MM')} {h}. ders: {t} "
+                                               f"({why})" for d, h, t, why in exc))
+        top = max((v["assigned"] for _t, v in rows), default=0) or 1
         self.table.setRowCount(len(rows))
-        for i, r in enumerate(rows):
-            self.table.setItem(i, 0, _item(r[0]))
-            for c, val in ((1, r[2]), (2, r[3])):
+        for i, (t, v) in enumerate(rows):
+            self.table.setItem(i, 0, _item(t))
+            for c, val in enumerate((v["days"], v["chances"], v["as_duty"], v["as_other"],
+                                     v["assigned"]), start=1):
                 it = _item(val)
                 it.setTextAlignment(Qt.AlignCenter)
-                if c == 2:
+                if c == 5:
                     f = it.font()
                     f.setBold(True)
                     it.setFont(f)
+                if c == 4 and val:
+                    it.setBackground(YELLOW)
                 self.table.setItem(i, c, it)
             bar = QProgressBar()
             bar.setRange(0, top)
-            bar.setValue(r[3])
+            bar.setValue(v["assigned"])
             bar.setTextVisible(False)
             bar.setFixedHeight(12)
             bar.setStyleSheet(f"QProgressBar {{ border:none; background:transparent; }}"
@@ -1631,25 +1676,48 @@ class ReportTab(QWidget):
             hl = QVBoxLayout(holder)
             hl.setContentsMargins(8, 0, 8, 0)
             hl.addWidget(bar)
-            self.table.setCellWidget(i, 3, holder)
-        month_total = sum(r[2] for r in rows)
-        duty = [r for r in rows if r[1]]
-        if not rows:
-            self.summary.setText(f"{export.month_tr(m)} için henüz kayıt yok.")
-            return
-        low = min(r[3] for r in duty) if duty else 0
-        nxt = [r[0] for r in duty if r[3] == low][:3]
-        self.summary.setText(
-            f"<b>{export.month_tr(m)}</b>: gelmeyen öğretmenlerin <b>{month_total}</b> dersi "
-            f"dolduruldu." + (f"<br>Sıradaki öncelik (bu yıl en az giren nöbetçiler): "
-                              f"<b>{', '.join(nxt)}</b>" if nxt else ""))
+            self.table.setCellWidget(i, 6, holder)
+
+    def print_(self):
+        from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
+        self.refresh()
+        doc = QTextDocument()
+        has_logo = os.path.exists(logo_path())
+        if has_logo:
+            doc.addResource(QTextDocument.ImageResource, QUrl("logo"), QImage(logo_path()))
+        doc.setHtml(export.report_html(self.title, self.stats, self.win.school_info(), has_logo))
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setPageOrientation(QPageLayout.Portrait)
+        dlg = QPrintPreviewDialog(printer, self)
+        dlg.setWindowTitle("Baskı önizleme — PDF için yazıcı olarak 'Microsoft Print to PDF' seçin")
+        dlg.resize(1100, 800)
+        dlg.paintRequested.connect(doc.print_)
+        dlg.exec()
 
     def to_excel(self):
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
         path, _ = QFileDialog.getSaveFileName(self, "Excel olarak kaydet",
-                                              f"aylik_rapor_{self.key()}.xlsx", "Excel (*.xlsx)")
-        if path:
-            export.save_report_xlsx(path, self.key(), self.rows, self.win.school_header())
-            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+                                              f"adalet_raporu_{self.key()}.xlsx", "Excel (*.xlsx)")
+        if not path:
+            return
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Rapor"
+        ws.append([self.win.school_header()])
+        ws.append([f"Boş ders görevlendirme raporu — {self.title}"])
+        ws.append([export.fairness_summary(self.stats)[0]])
+        ws.append([])
+        ws.append([h.replace("\n", " ") for h in self.HEADERS[:6]])
+        for c in ws[5]:
+            c.font = Font(bold=True)
+            c.fill = PatternFill("solid", fgColor="DDE4EE")
+        for t, v in self.rows:
+            ws.append([t, v["days"], v["chances"], v["as_duty"], v["as_other"], v["assigned"]])
+        for col, w in zip("ABCDEF", (30, 14, 22, 18, 22, 10)):
+            ws.column_dimensions[col].width = w
+        wb.save(path)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
 
 class AdminsDialog(QDialog):

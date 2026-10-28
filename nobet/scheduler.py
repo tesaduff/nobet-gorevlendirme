@@ -74,8 +74,11 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         return month_counts.get(t, (0, 0, 0))[0]
 
     def fairness(t):
-        return (year_counts.get(t, (0,))[0], month_total(t), today.get(t, 0),
-                total_counts.get(t, 0), t)
+        # Güncel toplam: o gün verilen dersler de anında sayılır (aynı gün üst üste
+        # aynı kişiye yığılmasın). Önce eğitim yılı toplamı, sonra ay, sonra tüm zamanlar.
+        now = today.get(t, 0)
+        return (year_counts.get(t, (0,))[0] + now, month_total(t) + now,
+                total_counts.get(t, 0) + now, t)
 
     def window(t, h):
         hs = busy.get(t, set())

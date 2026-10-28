@@ -108,9 +108,18 @@ class _Groups:
             self.parent[rb] = ra
 
 
-def distribute(cfg, schedule, history=None):
-    """Aylık nöbet çizelgesini hesaplar. history: {öğretmen: bu yıl tutulan nöbet sayısı}."""
+def distribute(cfg, schedule, history=None, covered=None, demand=None):
+    """Aylık nöbet çizelgesini hesaplar.
+
+    history: {öğretmen: bu yıl tutulan nöbet günü}
+    covered: {öğretmen: bu yıl girdiği boş ders}  — çok girenler sakin günlere konur
+    demand:  {gün: nöbetçi başına düşen boş ders ortalaması} — geçmiş gün yoğunluğu
+    """
     history = history or {}
+    covered = covered or {}
+    demand = demand or {}
+    top_cov = max(covered.values(), default=0) or 1
+    top_dem = max(demand.values(), default=0) or 1
     warnings = []
     places = [(str(p).strip(), int(n)) for p, n in cfg.places if str(p).strip() and int(n) > 0]
     capacity = sum(n for _p, n in places)
@@ -175,6 +184,8 @@ def distribute(cfg, schedule, history=None):
     def cost(r, d):
         c = sum(day_cost(lesson_count(schedule, t, d), day_len[d], cfg.prefer_light_days)
                 for t in units[r])
+        # Bu yıl çok boş derse girenleri, geçmişte boş dersi az olan günlere yönlendir
+        c += 3 * sum(covered.get(t, 0) / top_cov for t in units[r]) * demand.get(d, 0) / top_dem
         return c + 3 * load[d] / capacity   # günleri dengeli doldur
 
     def place_unit(r):

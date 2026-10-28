@@ -1,9 +1,12 @@
-Sürüm 1.7.0
+Sürüm 1.8.0 — adalet
 
-Nöbetmatik:
-- Yeni kural ekranı: önce öğretmeni, sonra kuralı seçin; seçtiğiniz kurala göre ilgili alan açılır — Sabitle (gün + yer), Muaf (mazeret), Beraber (kiminle), Ayrı (kiminle), Gün kısıtı (günler). "Kuralı ekle" ile aşağıdaki listeye eklenir
-- Muafiyet kurallar adımına taşındı (mazeretiyle)
-- Dağıttıktan sonra yeni "Düzenle ve kaydet" adımı: her öğretmenin nöbet gününü elle değiştirebilirsiniz; yerler yeniden hesaplanır, dersi olmayan güne veya dolu güne yazınca uyarır
-- Geri / İleri / Kaydet düğmeleri üstte: küçük ekranlarda da her zaman görünür
+Görevlendirme daha adil:
+- Aynı gün içinde verilen dersler anında sayılır; bir nöbetçiye aynı gün üst üste yığılmaz
+- Nöbetmatik, bu yıl çok boş derse girmiş öğretmenleri geçmişte daha sakin geçen günlere, az girenleri yoğun günlere yerleştirir; aylar içinde fark kapanır
 
-Aylık rapor sadeleşti: Öğretmen · Bu ay · Bu yıl ve çubuk; üstte özet ve sıradaki öncelikli öğretmenler.
+Aylık rapor herkese gösterilebilir:
+- Adalet göstergesi kaydedilen her görevi tek tek denetler: "o saatte boş olan nöbetçiler arasından en az derse girmiş olan mı seçildi?" Hepsi kurala uygunsa "✅ Adil — her görevde sırası gelen öğretmen seçildi"; elle yapılan sıra dışı seçimler varsa sayısı ve kimler olduğu yazılır
+- Fark varsa sebebi açıklanır (ör. hangi gün daha çok öğretmen gelmedi)
+- Sütunlar: Nöbet günü · Derse girebileceği boş saat · Nöbetçiyken girdiği · Nöbetçi değilken girdiği · Toplam
+- Dönem: seçilen ay veya eğitim yılı (Eylül'den bu yana)
+- "Raporu yazdır": logo, okul adı, dönem, adalet açıklaması, kural metni ve imza yerleriyle panoya asılabilir çıktı; Excel'e aktarma

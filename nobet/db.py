@@ -333,3 +333,66 @@ class Database:
     def save_nobetmatik_config(self, cfg_dict):
         import json
         self.set_setting("nobetmatik", json.dumps(cfg_dict, ensure_ascii=False))
+
+    # ---- adalet raporu
+    def fairness_stats(self, start, end):
+        """[start, end] aralığında öğretmen başına: nöbet günü, fırsat, girdiği ders.
+
+        Fırsat: bir ders boşa düştüğünde öğretmenin o gün nöbetçi olup o saatte kendi dersinin
+        olmadığı (yani derse girebileceği) durum sayısı. Adalet bu üç sayıyla gösterilir.
+        """
+        admins = self.admins()
+        out = {}
+
+        def row(t):
+            return out.setdefault(t, {"days": 0, "chances": 0, "assigned": 0, "as_duty": 0,
+                                      "as_other": 0})
+
+        # nöbet günleri (kayıt olsun olmasın, aralıktaki her iş günü)
+        d = dt.date.fromisoformat(start)
+        last = dt.date.fromisoformat(end)
+        while d <= last:
+            if d.weekday() < 5:
+                for t, p in self.duty_for(d.isoformat())[0]:
+                    if t not in admins:
+                        row(t)["days"] += 1
+            d += dt.timedelta(days=1)
+        dates = [r[0] for r in self.conn.execute(
+            "SELECT DISTINCT date FROM assignments WHERE date >= ? AND date <= ? ORDER BY date",
+            (start, end))]
+        # Kuralın her görevde uygulanıp uygulanmadığını denetle: o saatte boş nöbetçiler
+        # arasından güncel yıl toplamı en az olan mı seçildi?
+        running = {t: v[0] for t, v in self.year_counts(start, exclude_date=start).items()}
+        if dates and dates[0] == start:
+            pass
+        exceptions, by_weekday = [], {}
+        for date in dates:
+            vid = self.schedule_version_for(date)
+            sched = self.schedule(vid) if vid else {}
+            wd = dt.date.fromisoformat(date).weekday()
+            absent = self.absences(date)
+            duty = {t for t, _p in self.duty_for(date)[0] if t not in admins}
+            taken = {}
+            wk = by_weekday.setdefault(wd, [0, set()])
+            wk[1] |= duty
+            for hour, _absent, _info, assigned, kind, _note in sorted(self.assignments(date)):
+                wk[0] += 1
+                free = [t for t in duty if t not in absent and (wd, hour) not in sched.get(t, {})
+                        and t not in taken.get(hour, set())]
+                for t in free:
+                    row(t)["chances"] += 1
+                if free and assigned:
+                    best = min(running.get(t, 0) for t in free)
+                    if assigned not in free:
+                        exceptions.append((date, hour, assigned, "o saatte boş nöbetçi varken"))
+                    elif running.get(assigned, 0) > best:
+                        exceptions.append((date, hour, assigned, "daha az girmiş nöbetçi varken"))
+                if assigned:
+                    r = row(assigned)
+                    r["assigned"] += 1
+                    r["as_duty" if kind == "nobetci" else "as_other"] += 1
+                    running[assigned] = running.get(assigned, 0) + 1
+                    taken.setdefault(hour, set()).add(assigned)
+        out["__meta__"] = {"exceptions": exceptions,
+                           "weekday_load": {d: (n, len(ts)) for d, (n, ts) in by_weekday.items()}}
+        return out

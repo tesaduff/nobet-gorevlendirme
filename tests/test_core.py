@@ -541,3 +541,49 @@ def test_nobetmatik_manual_move():
     assert {e.weekday for e in res.entries if e.teacher == "T1"} == {1}
     move_teacher(cfg, res, sched, "T1", None)
     assert "T1" in res.unassigned and not any(e.teacher == "T1" for e in res.entries)
+
+
+def test_fairness_stats_and_verdict(tmp_path):
+    from nobet.parse_duty import DutyEntry
+    from nobet import export
+    db = Database(str(tmp_path / "t.db"))
+    # N1 boş, N2'nin 1. saatte dersi var
+    db.save_schedule({"A": {(0, 1): "9A", (0, 2): "9A"}, "N1": {(0, 5): "x"},
+                      "N2": {(0, 1): "x", (0, 5): "x"}}, "2026-09-01")
+    db.save_duty("2026-11", [DutyEntry(0, "N1", "Bahçe"), DutyEntry(0, "N2", "Zemin")])
+    sched = db.schedule(db.schedule_version_for("2026-11-02"))
+    plan = plan_day("2026-11-02", sched, [("N1", ""), ("N2", "")], {"A": "R"}, {}, {})
+    db.save_day("2026-11-02", plan.absences, plan.assignments)
+    st = db.fairness_stats("2026-11-02", "2026-11-02")
+    assert st["N1"]["chances"] == 2 and st["N2"]["chances"] == 1      # N2 1. saatte derste
+    assert st["N1"]["assigned"] + st["N2"]["assigned"] == 2
+    assert st["N1"]["days"] == st["N2"]["days"] == 1
+    verdict, _c, _l = export.fairness_summary(st)
+    assert verdict.startswith("✅") and st["__meta__"]["exceptions"] == []
+    # Elle kural dışı seçim yapılırsa rapor bunu açıkça söyler
+    a = plan.assignments
+    a[0].assigned = a[1].assigned = "N1"
+    db.save_day("2026-11-02", plan.absences, a)
+    st = db.fairness_stats("2026-11-02", "2026-11-02")
+    verdict, _c, _l = export.fairness_summary(st)
+    assert verdict.startswith("⚠") and len(st["__meta__"]["exceptions"]) == 1
+
+
+def test_same_day_running_count_spreads_lessons():
+    # A base 0, B base 1; 3 boş ders, ikisi de hep boş: güncel toplamla A,B,A gibi dağılmalı
+    sched = {"X": {(0, 1): "9A", (0, 2): "9A", (0, 3): "9A"}, "A": {}, "B": {}}
+    plan = plan_day("2026-11-02", sched, [("A", ""), ("B", "")], {"X": "R"}, {}, {},
+                    year_counts={"B": (1, 1, 0)})
+    got = [a.assigned for a in sorted(plan.assignments, key=lambda a: a.hour)]
+    assert got.count("A") == 2 and got.count("B") == 1
+
+
+def test_nobetmatik_moves_heavy_coverers_to_quiet_days():
+    from nobet.nobetmatik import Config, distribute
+    sched = _sched(10)
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 2]],
+                 prefer_light_days=False)
+    demand = {0: 5.0, 1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5}         # Pazartesi çok yoğun
+    res = distribute(cfg, sched, covered={"T5": 9, "T6": 9}, demand=demand)
+    day = {t: d for d, ts in res.by_day.items() for t in ts}
+    assert day["T5"] != 0 and day["T6"] != 0

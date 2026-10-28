@@ -556,7 +556,16 @@ class NobetmatikPage(QWidget):
     def run(self):
         c = self._collect()
         history = self.db.duty_history(c.month)
-        self.result = distribute(c, self.schedule, history)
+        # Gün yükü dengesi: bu yıl kim kaç boş derse girdi, hangi gün ne kadar yoğundu
+        start = self.db.school_year_start(c.month + "-01")
+        end = (U.dt.date.fromisoformat(c.month + "-01") - U.dt.timedelta(days=1)).isoformat()
+        covered, demand = {}, {}
+        if end >= start:
+            stats = self.db.fairness_stats(start, end)
+            covered = {t: v["assigned"] for t, v in stats.items() if t != "__meta__"}
+            demand = {d: n / max(1, k) for d, (n, k) in
+                      stats.get("__meta__", {}).get("weekday_load", {}).items()}
+        self.result = distribute(c, self.schedule, history, covered, demand)
         self.week.blockSignals(True)
         self.week.clear()
         for monday, dates in self.result.weeks:

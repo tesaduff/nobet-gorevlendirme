@@ -341,3 +341,84 @@ def duty_html(month, entries, info=None, has_logo=False, exempt=None, places=Non
 <br>
 <table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
 </body></html>"""
+
+
+def fairness_summary(stats):
+    """Adalet göstergesi: (karar, renk, açıklama satırları).
+
+    Karar, kaydedilen her görevin kurala uygun olup olmadığına göre verilir: o saatte boş olan
+    nöbetçiler arasından o ana kadar en az derse girmiş olan mı seçildi?
+    """
+    meta = stats.get("__meta__", {})
+    people = {t: v for t, v in stats.items() if t != "__meta__"}
+    duty = {t: v for t, v in people.items() if v["days"]}
+    total = sum(v["assigned"] for v in people.values())
+    if not total:
+        return "Henüz görevlendirme yok", "#64748b", []
+    exc = meta.get("exceptions", [])
+    lines = []
+    counts = [v["assigned"] for v in duty.values() if v["chances"]]
+    if counts:
+        lines.append(f"Nöbetçiler arasında en çok giren ile en az giren arasındaki fark: "
+                     f"<b>{max(counts) - min(counts)} ders</b>.")
+    load = meta.get("weekday_load", {})
+    if load and len(counts) > 1 and max(counts) - min(counts) > 1:
+        per = {d: n / max(1, k) for d, (n, k) in load.items()}
+        hi = max(per, key=per.get)
+        lo = min(per, key=per.get)
+        if per[hi] > per[lo] * 1.3:
+            lines.append(f"Fark gün yükünden: <b>{DAYS[hi]}</b> günleri nöbetçi başına "
+                         f"{per[hi]:.1f} boş ders düştü, <b>{DAYS[lo]}</b> günleri {per[lo]:.1f}. "
+                         "Bu gün yükü farkı Nöbetmatik'in sonraki aylarındaki gün değişimiyle dengelenir.")
+    if not exc:
+        return ("✅ Adil — her görevde sırası gelen öğretmen seçildi", "#059669",
+                [f"Kaydedilen <b>{total}</b> görevin hepsinde, o saatte boş olan nöbetçiler "
+                 "arasından o ana kadar en az derse girmiş olan görevlendirildi."] + lines)
+    names = ", ".join(sorted({x[2] for x in exc}, key=normalize))
+    return (f"⚠ {len(exc)} görevde sıra atlandı (elle değişiklik)", "#d97706",
+            [f"{total} görevin {total - len(exc)} tanesinde kural uygulandı; {len(exc)} görevde "
+             f"elle seçim yapıldı: {names}. Program sonraki görevlendirmelerde az girenlere "
+             "öncelik vererek farkı kapatır."] + lines)
+
+
+def report_html(period_title, stats, info=None, has_logo=False):
+    e = html.escape
+    info = info or {}
+    verdict, color, lines = fairness_summary(stats)
+    rows = sorted(((t, v) for t, v in stats.items()
+                   if t != "__meta__" and (v["days"] or v["assigned"])),
+                  key=lambda x: (-x[1]["assigned"], normalize(x[0])))
+    body = "".join(
+        f"<tr><td>{i}</td><td>{e(t)}</td><td align=center>{v['days']}</td>"
+        f"<td align=center>{v['chances']}</td><td align=center>{v['as_duty']}</td>"
+        f"<td align=center>{v['as_other']}</td><td align=center><b>{v['assigned']}</b></td></tr>"
+        for i, (t, v) in enumerate(rows, start=1))
+    logo = "<img src='logo' height=60>" if has_logo else ""
+    head = "<br>".join(x for x in ("T.C.", e(info.get("school_city", "")),
+                                   f"<b>{e(info.get('school', ''))}</b>") if x)
+    sign = []
+    for title, key in (("Müdür Yardımcısı", "vice_principal"), ("Okul Müdürü", "principal")):
+        name = (info.get(key, "") or "").replace(";", ",").split(",")[0].strip()
+        sign.append(f"<td align=center width=40%>{e(name) or '&nbsp;'}<br><b>{title}</b>"
+                    "<br><br>İmza</td>")
+    return f"""
+<html><body style="font-family:'Segoe UI', Arial; font-size:9pt; color:#111">
+<table width=100%><tr><td width=15%>{logo}</td><td align=center style="font-size:10pt">{head}</td>
+<td width=15%></td></tr></table>
+<h3 align=center style="margin:6px 0 2px 0">BOŞ DERS GÖREVLENDİRME RAPORU</h3>
+<p align=center style="margin:0 0 8px 0">{e(period_title)}</p>
+<p style="font-size:11pt; color:{color}"><b>{e(verdict)}</b></p>
+<p>{'<br>'.join(lines)}</p>
+<p style="color:#475569">Görevlendirme kuralı: Bir öğretmen gelmediğinde her dersi için, o saatte
+<b>kendi dersi olmayan</b> nöbetçi öğretmenler arasından <b>bu eğitim yılında en az derse girmiş
+olan</b> seçilir. Boş nöbetçi yoksa o saatte dersi olmayan diğer öğretmenler arasından seçilir.
+İdareciler otomatik görevlendirilmez.</p>
+<table border=1 cellspacing=0 cellpadding=4 width=100% style="border-collapse:collapse">
+<tr style="background:#e2e8f0"><th width=5%>No</th><th>Öğretmen</th><th>Nöbet tuttuğu gün</th>
+<th>Derse girebileceği boş saat</th><th>Nöbetçiyken girdiği</th><th>Nöbetçi değilken girdiği</th>
+<th>Toplam</th></tr>
+{body}</table>
+<p style="font-size:8pt; color:#475569">"Derse girebileceği boş saat": bir ders boşa düştüğünde
+öğretmenin o gün nöbetçi olup o saatte kendi dersinin olmadığı durum sayısı.</p>
+<br><table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
+</body></html>"""
