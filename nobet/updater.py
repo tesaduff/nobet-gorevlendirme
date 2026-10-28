@@ -11,7 +11,8 @@ import urllib.request
 from .version import __version__
 
 REPO = "tesaduff/nobet-gorevlendirme"
-ASSET_NAME = "NobetGorevlendirme.exe"
+ASSET_NAME = "NobetGorevlendirme.exe"            # taşınabilir tek dosya
+INSTALLER_NAME = "NobetGorevlendirme-Kurulum.exe"  # kurulum sihirbazı
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 
@@ -59,14 +60,21 @@ def check():
         raise UpdateError(f"GitHub yanıtı: {e.code}") from e
     except Exception as e:
         raise UpdateError(f"İnternete bağlanılamadı: {e}") from e
-    asset = next((a for a in data.get("assets", []) if a["name"].lower() == ASSET_NAME.lower()),
-                 None)
+    want = INSTALLER_NAME if is_installed() else ASSET_NAME
+    asset = next((a for a in data.get("assets", []) if a["name"].lower() == want.lower()), None)
     return {
         "version": data.get("tag_name", "").lstrip("vV"),
         "notes": data.get("body") or "",
         "url": asset["browser_download_url"] if asset else None,
         "size": asset["size"] if asset else 0,
     }
+
+
+def is_installed():
+    """Kurulum sihirbazıyla kurulduysa (yanında kaldırma programı vardır)."""
+    if not getattr(sys, "frozen", False):
+        return False
+    return os.path.exists(os.path.join(os.path.dirname(sys.executable), "unins000.exe"))
 
 
 def can_self_update():
@@ -78,7 +86,10 @@ def download(info, progress=None):
     if not info.get("url"):
         raise UpdateError("Sürümde exe dosyası bulunamadı.")
     exe = sys.executable
-    target = exe + ".yeni"
+    if is_installed():
+        target = os.path.join(tempfile.gettempdir(), INSTALLER_NAME)
+    else:
+        target = exe + ".yeni"
     try:
         with _request(info["url"], accept="application/octet-stream") as r, \
                 open(target, "wb") as f:
@@ -104,9 +115,22 @@ def download(info, progress=None):
 
 
 def apply_and_restart(new_file):
-    """Program kapandıktan sonra exe'yi değiştiren ve yeniden açan bir betik başlatır."""
+    """Program kapandıktan sonra güncellemeyi uygulayan ve programı yeniden açan betik başlatır.
+
+    Kurulu sürümde yeni kurulum sihirbazı sessizce çalıştırılır (programı kendisi açar);
+    taşınabilir sürümde exe dosyası yenisiyle değiştirilir.
+    """
     exe = sys.executable
     script = os.path.join(tempfile.gettempdir(), "nobet_guncelle.bat")
+    if new_file.lower().endswith(INSTALLER_NAME.lower()):
+        with open(script, "w", encoding="cp1254", errors="replace") as f:
+            f.write(f"""@echo off
+timeout /t 2 /nobreak >nul
+"{new_file}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+del "%~f0"
+""")
+        subprocess.Popen(["cmd", "/c", script], creationflags=0x08000000)  # CREATE_NO_WINDOW
+        return
     with open(script, "w", encoding="cp1254", errors="replace") as f:
         f.write(f"""@echo off
 set /a n=0

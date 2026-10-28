@@ -1,26 +1,14 @@
-Sürüm 1.0.2
+Sürüm 1.1.0
 
-Güncelleme:
-- Okul/kurum ağlarında (ör. MEB filtresi) "CERTIFICATE_VERIFY_FAILED" hatası giderildi; program artık Windows'un sertifika deposunu kullanıyor
-- Güncelleme yine de başarısız olursa indirme sayfasını tarayıcıda açan düğme eklendi
+Yenilikler:
+- Yeni modern tasarım: sol menü, kart görünümü, renkli düğmeler, günlük özet kutucukları
+- Kurulum sihirbazı (NobetGorevlendirme-Kurulum.exe): Başlat menüsü ve masaüstü kısayolu, Program Ekle/Kaldır; yönetici izni gerekmez
+- Excel kayıt dosyası: her kayıttan sonra Belgeler\Nöbet Görevlendirme\Kayıtlar.xlsx güncellenir (görevlendirmeler, devamsızlıklar, aylık özet, ders programı, nöbet çizelgesi). Konumu Ayarlar'dan değiştirilebilir
+- İlk açılışta "Başlarken" bölümü: ders programını ve nöbet çizelgesini yüklemek için adım adım düğmeler
+- Kurulu sürüm güncellemeleri sessizce uygular ve programı yeniden açar
 
-Sürüm 1.0.1'deki iyileştirmeler (gerçek okul belgeleriyle):
+Hangi dosyayı indirmeliyim?
+- NobetGorevlendirme-Kurulum.exe → bilgisayara kurmak için (önerilen)
+- NobetGorevlendirme.exe → kurmadan, taşınabilir olarak çalıştırmak için
 
-Ders programı okuma:
-- Birden fazla saate yayılan blok dersler (ör. 2-3-4. saat tek kutu) artık her saat için dolu sayılıyor
-- "Öğle Arası" gibi saat olmayan sütunlar ve "Derslerin Toplamı" sütunu yok sayılıyor
-- Birleştirilmiş hücreler (yatay ve dikey) doğru okunuyor
-
-Nöbet çizelgesi okuma:
-- Haftalara bölünmüş çizelgeler ("05-09 EKİM", "28 EKİM - 01 KASIM", "05.10.2026 - 09.10.2026") tanınıyor; her nöbet kendi tarihine bağlanıyor
-- Çizelgede olmayan haftalarda aynı günün en yakın haftası kullanılıyor
-- İsimlerin önündeki sıra numaraları (1, 2, 3) ve tatil satırları ("29 Ekim Cumhuriyet Bayramı") doğru ayıklanıyor
-- Ders programında bulunmayan isimler de listeye ekleniyor ve kırmızıyla işaretleniyor
-- "ÜMMÜGÜLSÜM" / "ÜMMÜ GÜLSÜM" gibi boşluk farkları eşleşiyor
-
-Görevlendirme:
-- Nöbetçi idareciler (N.İDARECİ / müdür yardımcısı) varsayılan olarak derse görevlendirilmiyor; Ayarlar'dan açılabilir
-- Nöbet sekmesi haftaları ayrı ayrı gösteriyor
-- Listeler Türkçe alfabeye göre sıralanıyor
-
-Not: Ders programınızı daha önce yüklediyseniz güncellemeden sonra PDF'i bir kez daha yükleyin.
+Verileriniz (%APPDATA%\NobetGorevlendirme) her iki durumda da korunur.

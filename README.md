@@ -6,11 +6,20 @@ nöbetçi öğretmenleri **adil** şekilde otomatik atayan Windows programı.
 ## Kurulum
 
 1. [Releases](https://github.com/tesaduff/nobet-gorevlendirme/releases/latest) sayfasından
-   `NobetGorevlendirme.exe` dosyasını indirin.
-2. Dosyayı **Masaüstü** veya **Belgeler** gibi bir klasöre koyun. Program Files'a koymayın,
-   çünkü güncelleme o klasöre yazamaz.
-3. Çift tıklayıp açın. Windows "bilinmeyen yayımcı" uyarısı verirse
-   **Ek bilgi → Yine de çalıştır** seçin.
+   **`NobetGorevlendirme-Kurulum.exe`** dosyasını indirin ve çift tıklayın.
+2. Windows "bilinmeyen yayımcı" uyarısı verirse **Ek bilgi → Yine de çalıştır** seçin.
+3. Kurulum sihirbazında **İleri → Kur → Son** deyin. Yönetici izni gerekmez. Program Başlat
+   menüsüne ve masaüstüne eklenir.
+
+Kurmadan kullanmak isterseniz aynı sayfadaki taşınabilir `NobetGorevlendirme.exe` dosyasını
+Masaüstü gibi bir klasöre koyup çalıştırın.
+
+## Kayıtlar (Excel)
+
+Her kayıttan sonra **Belgeler\Nöbet Görevlendirme\Kayıtlar.xlsx** dosyası yenilenir. Dosyada
+şu sayfalar bulunur: Görevlendirmeler, Devamsızlık, Aylık Özet, Ders Programı ve Nöbet Çizelgesi.
+Dosyanın konumunu Ayarlar'dan değiştirebilirsiniz. Excel dosyası açıkken yazılamaz; programdaki
+kayıtlar yine de korunur ve dosya bir sonraki kayıtta güncellenir.
 
 ## Kullanım
 

@@ -115,3 +115,99 @@ def save_report_xlsx(path, month, rows, school=""):
     for col, w in zip("ABCDEF", (28, 16, 20, 16, 18, 18)):
         ws.column_dimensions[col].width = w
     wb.save(path)
+
+
+RECORDS_FILE = "Kayıtlar.xlsx"
+
+
+def write_records_xlsx(path, db, school=""):
+    """Tüm kayıtları tek bir Excel dosyasına yazar (her kayıttan sonra yenilenir).
+
+    Dosya Excel'de açıkken yazılamaz; o durumda PermissionError yükselir ve veriler
+    programın veritabanında güvende kalır, bir sonraki kayıtta yeniden denenir.
+    """
+    import os
+    import tempfile
+
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    head_fill = PatternFill("solid", fgColor="DDE4EE")
+    fills = {"bos": PatternFill("solid", fgColor="FFF4CC"),
+             "yok": PatternFill("solid", fgColor="FFD6D6")}
+
+    def sheet(wb, title, headers, widths, first=False):
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = title
+        ws.append(headers)
+        for c in ws[1]:
+            c.font = Font(bold=True)
+            c.fill = head_fill
+        for i, w in enumerate(widths):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i + 1)].width = w
+        ws.freeze_panes = "A2"
+        return ws
+
+    wb = openpyxl.Workbook()
+    ws = sheet(wb, "Görevlendirmeler",
+               ["Tarih", "Gün", "Saat", "Gelmeyen Öğretmen", "Durumu", "Sınıf / Ders",
+                "Görevlendirilen", "Tür", "Not"], [12, 11, 6, 26, 10, 22, 26, 24, 60], first=True)
+    rows = db.conn.execute(
+        "SELECT a.date, a.hour, a.absent_teacher, ab.reason, a.info, a.assigned, a.kind, a.note "
+        "FROM assignments a LEFT JOIN absences ab ON ab.date = a.date "
+        "AND ab.teacher = a.absent_teacher ORDER BY a.date, a.hour, a.absent_teacher").fetchall()
+    for date, hour, absent, reason, info, assigned, kind, note in rows:
+        d = dt.date.fromisoformat(date)
+        ws.append([d, DAYS[d.weekday()] if d.weekday() < 5 else "", hour, absent, reason or "",
+                   info or "", assigned or "—", KIND_LABELS.get(kind, kind or ""), note or ""])
+        ws.cell(ws.max_row, 1).number_format = "DD.MM.YYYY"
+        if kind in fills:
+            for c in ws[ws.max_row]:
+                c.fill = fills[kind]
+    for row in ws.iter_rows(min_row=2):
+        row[-1].alignment = Alignment(wrap_text=True, vertical="top")
+
+    ws = sheet(wb, "Devamsızlık", ["Tarih", "Gün", "Öğretmen", "Durumu"], [12, 11, 28, 12])
+    for date, teacher, reason in db.conn.execute(
+            "SELECT date, teacher, reason FROM absences ORDER BY date, teacher"):
+        d = dt.date.fromisoformat(date)
+        ws.append([d, DAYS[d.weekday()] if d.weekday() < 5 else "", teacher, reason or ""])
+        ws.cell(ws.max_row, 1).number_format = "DD.MM.YYYY"
+
+    ws = sheet(wb, "Aylık Özet", ["Ay"] + REPORT_HEADERS, [14, 28, 16, 20, 16, 18, 18])
+    months = [r[0] for r in db.conn.execute(
+        "SELECT DISTINCT substr(date, 1, 7) FROM assignments ORDER BY 1 DESC")]
+    for m in months:
+        for r in report_rows(db.counts(m), db.duty_days_in_month(m)):
+            ws.append([month_tr(m)] + r)
+
+    ws = sheet(wb, "Ders Programı", ["Geçerlilik", "Öğretmen", "Gün", "Saat", "Sınıf / Ders"],
+               [12, 28, 11, 6, 30])
+    for vid, valid_from, *_ in db.schedule_versions():
+        sched = db.schedule(vid)
+        for t in sorted(sched, key=normalize):
+            for (d, h), info in sorted(sched[t].items()):
+                ws.append([dt.date.fromisoformat(valid_from), t, DAYS[d], h, info])
+                ws.cell(ws.max_row, 1).number_format = "DD.MM.YYYY"
+
+    ws = sheet(wb, "Nöbet Çizelgesi", ["Ay", "Tarih", "Gün", "Öğretmen", "Nöbet Yeri"],
+               [14, 12, 11, 28, 18])
+    for m, _n in db.duty_months():
+        for wd, date, t, p in sorted(db.duty_rows(m), key=lambda r: (r[1] or "", r[0], r[3] or "")):
+            ws.append([month_tr(m), dt.date.fromisoformat(date) if date else "Her hafta",
+                       DAYS[wd], t, p or ""])
+            if date:
+                ws.cell(ws.max_row, 2).number_format = "DD.MM.YYYY"
+
+    if school:
+        wb.properties.title = f"{school} — Nöbetçi Öğretmen Görevlendirme Kayıtları"
+    folder = os.path.dirname(path) or "."
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(suffix=".xlsx", dir=folder)
+    os.close(fd)
+    try:
+        wb.save(tmp)
+        os.replace(tmp, path)  # Excel'de açıksa burada PermissionError
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
