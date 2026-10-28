@@ -2,10 +2,11 @@
 import os
 import sys
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                               QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractScrollArea, QAbstractSpinBox, QComboBox, QFrame,
+                               QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QScrollArea,
+                               QStackedWidget, QVBoxLayout, QWidget)
 
 # Ayarlar'dan seçilebilen vurgu renkleri: ad -> (ana renk, üzerine gelince, açık ton, menü zemini)
 ACCENTS = {
@@ -15,7 +16,15 @@ ACCENTS = {
     "Turuncu": ("#ea580c", "#c2410c", "#fff7ed", "#431407"),
     "Kırmızı": ("#dc2626", "#b91c1c", "#fef2f2", "#450a0a"),
     "Gri": ("#475569", "#334155", "#f1f5f9", "#0f172a"),
+    "Lacivert": ("#1e40af", "#1e3a8a", "#eff6ff", "#0b1a3e"),
+    "Turkuaz": ("#0891b2", "#0e7490", "#ecfeff", "#083344"),
+    "Pembe": ("#db2777", "#be185d", "#fdf2f8", "#500724"),
+    "Mor-Lila": ("#9333ea", "#7e22ce", "#faf5ff", "#3b0764"),
+    "Kahve": ("#92400e", "#78350f", "#fffbeb", "#2b1505"),
+    "Zeytin": ("#4d7c0f", "#3f6212", "#f7fee7", "#1a2e05"),
 }
+RADII = {"Keskin": 3, "Normal": 8, "Yuvarlak": 14}
+FONTS = ["Segoe UI", "Calibri", "Arial", "Tahoma", "Verdana", "Trebuchet MS"]
 
 # Tablo satır renkleri: arayüz bu nesneleri kullanır, tema değişince yerinde güncellenir.
 GREEN, YELLOW, RED, BLUE = QColor(), QColor(), QColor(), QColor()
@@ -29,15 +38,17 @@ MUTED = "#64748b"
 def resource(name):
     """Paketlenmiş (PyInstaller) veya kaynak koddan çalışırken assets/ içindeki dosya."""
     base = getattr(sys, "_MEIPASS", os.path.join(os.path.dirname(__file__), ".."))
-    return os.path.join(base, "assets", name)
+    return os.path.abspath(os.path.join(base, "assets", name))
 
 
 def app_icon():
     return QIcon(resource("icon.png"))
 
 
-def build_style(accent="Mor", dark=False):
+def build_style(accent="Mor", dark=False, radius="Normal"):
     global ACCENT, MUTED
+    R = RADII.get(radius, 8)
+    R2 = R + 4
     a, a_hover, a_soft, side = ACCENTS.get(accent, ACCENTS["Mor"])
     if dark:
         BG, CARD, BORDER, TEXT, MUTED = "#0f172a", "#1e293b", "#334155", "#e2e8f0", "#94a3b8"
@@ -50,6 +61,9 @@ def build_style(accent="Mor", dark=False):
     ACCENT = a
     for color, value in zip((GREEN, YELLOW, RED, BLUE), _ROWS[dark]):
         color.setRgb(QColor(value).rgb())
+    tone = "light" if dark else "dark"
+    ARROW_DOWN = resource(f"chevron_down_{tone}.png").replace("\\", "/")
+    ARROW_UP = resource(f"chevron_up_{tone}.png").replace("\\", "/")
     values = dict(locals())
     values["MUTED"] = MUTED
     return STYLE.format(**values)
@@ -62,19 +76,19 @@ QToolTip {{ background: {TEXT}; color: white; border: none; padding: 6px; border
 
 /* Kartlar */
 QGroupBox {{
-    background: {CARD}; border: 1px solid {BORDER}; border-radius: 12px;
+    background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px;
     margin-top: 14px; padding: 14px 12px 12px 12px; font-weight: 600;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin; left: 14px; padding: 2px 6px; color: {TEXT};
     background: transparent;
 }}
-QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 12px; }}
-QFrame#hint {{ background: {a_soft}; border: 1px solid {a}; border-radius: 12px; }}
+QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px; }}
+QFrame#hint {{ background: {a_soft}; border: 1px solid {a}; border-radius: {R2}px; }}
 
 /* Düğmeler */
 QPushButton {{
-    background: {CARD}; border: 1px solid {INPUT_BORDER}; border-radius: 8px;
+    background: {CARD}; border: 1px solid {INPUT_BORDER}; border-radius: {R}px;
     padding: 7px 14px; font-weight: 500;
 }}
 QPushButton:hover {{ background: {HOVER}; border-color: #94a3b8; }}
@@ -89,19 +103,32 @@ QPushButton[variant="danger"] {{ color: #ef4444; border-color: #fca5a5; }}
 QPushButton[variant="danger"]:hover {{ background: {HOVER}; }}
 QPushButton[variant="step"] {{
     text-align: left; padding: 14px 16px; font-size: 11pt; font-weight: 600;
-    background: {CARD}; border: 1px solid {a}; border-radius: 10px;
+    background: {CARD}; border: 1px solid {a}; border-radius: {R2}px;
 }}
 QPushButton[variant="step"]:hover {{ background: {a_soft}; border-color: {a}; }}
 
 /* Giriş alanları */
 QLineEdit, QComboBox, QDateEdit, QSpinBox, QPlainTextEdit {{
-    background: {CARD}; border: 1px solid {INPUT_BORDER}; border-radius: 7px; padding: 5px 8px;
+    background: {CARD}; border: 1px solid {INPUT_BORDER}; border-radius: {R}px; padding: 5px 8px;
     selection-background-color: {a};
 }}
 QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QSpinBox:focus, QPlainTextEdit:focus {{
     border: 1px solid {a};
 }}
-QComboBox::drop-down, QDateEdit::drop-down {{ border: none; width: 22px; }}
+QComboBox, QDateEdit {{ padding-right: 30px; }}
+QComboBox::drop-down, QDateEdit::drop-down {{
+    subcontrol-origin: padding; subcontrol-position: center right; width: 28px; border: none;
+}}
+QComboBox::down-arrow, QDateEdit::down-arrow {{ image: url({ARROW_DOWN}); width: 12px; height: 12px; }}
+QComboBox::down-arrow:on {{ image: url({ARROW_UP}); }}
+QSpinBox {{ padding-right: 24px; }}
+QSpinBox::up-button, QSpinBox::down-button {{
+    subcontrol-origin: border; width: 22px; border: none; background: transparent;
+}}
+QSpinBox::up-button {{ subcontrol-position: top right; }}
+QSpinBox::down-button {{ subcontrol-position: bottom right; }}
+QSpinBox::up-arrow {{ image: url({ARROW_UP}); width: 10px; height: 10px; }}
+QSpinBox::down-arrow {{ image: url({ARROW_DOWN}); width: 10px; height: 10px; }}
 QComboBox QAbstractItemView {{
     background: {CARD}; border: 1px solid {BORDER}; selection-background-color: {a_soft};
     selection-color: {TEXT}; outline: none;
@@ -110,7 +137,7 @@ QCheckBox {{ spacing: 8px; }}
 
 /* Tablolar ve listeler */
 QTableWidget, QListWidget#list {{
-    background: {CARD}; border: 1px solid {BORDER}; border-radius: 10px;
+    background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px;
     gridline-color: #eef2f7; alternate-background-color: {ALT};
     selection-background-color: {a_soft}; selection-color: {TEXT};
 }}
@@ -145,7 +172,7 @@ QListWidget#nav::item:selected {{ background: {a}; color: white; font-weight: 60
 /* Sayfa başlıkları ve özet kutucukları */
 QLabel#title {{ font-size: 17pt; font-weight: 700; color: {TEXT}; }}
 QLabel#subtitle {{ color: {MUTED}; }}
-QFrame#stat {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 12px; }}
+QFrame#stat {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px; }}
 QLabel#statValue {{ font-size: 20pt; font-weight: 700; }}
 QLabel#statLabel {{ color: {MUTED}; font-size: 9pt; }}
 """
@@ -156,17 +183,41 @@ DENSITIES = {"Sıkı": 30, "Normal": 36, "Rahat": 44}
 ROW_HEIGHT = 36
 
 
-def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal"):
-    global ROW_HEIGHT
+class WheelGuard(QObject):
+    """Fare tekerleği, tıklanmamış açılır kutu / sayı kutusunun değerini değiştirmesin;
+    bunun yerine sayfayı kaydırsın."""
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Wheel and isinstance(obj, (QComboBox, QAbstractSpinBox)) \
+                and not obj.hasFocus():
+            w = obj.parentWidget()
+            while w is not None and not isinstance(w, QAbstractScrollArea):
+                w = w.parentWidget()
+            if w is not None:
+                bar = w.verticalScrollBar()
+                bar.setValue(bar.value() - event.angleDelta().y())
+            return True
+        return False
+
+
+_guard = None
+
+
+def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal",
+          radius="Normal", family="Segoe UI"):
+    global ROW_HEIGHT, _guard
     size = FONT_SIZES.get(font_size, 10)
     ROW_HEIGHT = int(DENSITIES.get(density, 36) * size / 10)
-    font = QFont("Segoe UI")
+    font = QFont(family or "Segoe UI")
     font.setPointSizeF(size)
     font.setStyleHint(QFont.SansSerif)
     app.setFont(font)
     app.setStyle("Fusion")
-    app.setStyleSheet(build_style(accent, dark))
+    app.setStyleSheet(build_style(accent, dark, radius))
     app.setWindowIcon(app_icon())
+    if _guard is None:
+        _guard = WheelGuard(app)
+        app.installEventFilter(_guard)
 
 
 def variant(button, name):

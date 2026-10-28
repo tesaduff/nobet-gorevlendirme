@@ -1,4 +1,4 @@
-# Nöbetçi Öğretmen Görevlendirme
+# NöbetGörev — Nöbet Çizelgesi ve Öğretmen Görevlendirme
 
 Okulda gelmeyen (raporlu, izinli, görevli) öğretmenlerin boş kalan derslerine
 nöbetçi öğretmenleri **adil** şekilde otomatik atayan Windows programı.
@@ -8,7 +8,7 @@ nöbetçi öğretmenleri **adil** şekilde otomatik atayan Windows programı.
 1. [Releases](https://github.com/tesaduff/nobet-gorevlendirme/releases/latest) sayfasından
    **`NobetGorevlendirme-Kurulum.exe`** dosyasını indirin ve çift tıklayın.
 2. Windows "bilinmeyen yayımcı" uyarısı verirse **Ek bilgi → Yine de çalıştır** seçin.
-3. Kurulum soru sormadan biter, masaüstüne **Nöbetçi Öğretmen Görevlendirme** kısayolu eklenir
+3. Kurulum soru sormadan biter, masaüstüne **NöbetGörev** kısayolu eklenir
    ve program açılır. Yönetici izni gerekmez.
 
 Programı kaldırırken (Ayarlar → Uygulamalar) verilerin de silinip silinmeyeceği sorulur. Başka
@@ -29,7 +29,7 @@ kayıtlar yine de korunur ve dosya bir sonraki kayıtta güncellenir.
 1. **Ders Programı** → *Yeni ders programı yükle* (e-Okul/MEBBİS PDF'i veya Excel). Okunanları
    kontrol edip kaydedin. Hemen ardından **İdarecileri belirle** ile okul müdürü ve müdür
    yardımcılarını işaretleyin; onlara otomatik görev verilmez.
-2. **Nöbetmatik** → *Nöbetmatik ile yeni çizelge oluştur*. Adım adım: ay ve öğretmenler (muaflar ve
+2. **Nöbet Çizelgesi** → *Otomatik oluştur*, *Hazır çizelgem var (PDF/Excel)* veya *Elle gir*. Adım adım: ay ve öğretmenler (muaflar ve
    mazeretleri), nöbet yerleri ve kişi sayıları, seçenekler, kurallar (sabitle, beraber, ayrı, gün
    kısıtı), dağıt. Önizleyip yazdırın, **Kaydet ve kullan** deyin. Hazır çizelgeniz varsa
    *PDF/Excel'den yükle* ile de alabilirsiniz.
@@ -37,7 +37,7 @@ kayıtlar yine de korunur ve dosya bir sonraki kayıtta güncellenir.
    seçin, *Devam*, *Görevlendir*. Sonuç kaydedilir; isterseniz satır satır değiştirip yazdırın.
 4. **Aylık Rapor** → kim bu ay ve bu eğitim yılında kaç derse girdi.
 
-Yeni ay başlayınca program uyarır ve Nöbetmatik'i açmayı önerir.
+Yeni ay başlayınca program uyarır ve yeni nöbet çizelgesini oluşturmayı önerir.
 
 ### Dağıtım kuralları
 

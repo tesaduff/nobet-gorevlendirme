@@ -587,3 +587,15 @@ def test_nobetmatik_moves_heavy_coverers_to_quiet_days():
     res = distribute(cfg, sched, covered={"T5": 9, "T6": 9}, demand=demand)
     day = {t: d for d, ts in res.by_day.items() for t in ts}
     assert day["T5"] != 0 and day["T6"] != 0
+
+
+def test_nobetmatik_rules_override_free_days():
+    from nobet.nobetmatik import Config, distribute
+    sched = _sched(6)          # T1'in Salı dersi yok
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 2]],
+                 fixed=[{"teacher": "T1", "day": 1, "place": ""}])
+    res = distribute(cfg, sched)
+    assert "T1" in res.by_day[1]                    # kural, "dersi olmayan gün" seçeneğinden önce
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1]])
+    res = distribute(cfg, sched)
+    assert all(res.reasons.get(t) for t in res.unassigned)

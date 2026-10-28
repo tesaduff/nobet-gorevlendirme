@@ -1,17 +1,16 @@
-Sürüm 1.8.1
+Sürüm 1.9.0 — yeni ad: NöbetGörev
 
-- Nöbet çizelgesi sayfasının başında üç seçenek: "Nöbetmatik ile oluştur", "Hazır çizelgem var (PDF / Excel yükle)", "Elle gir / düzenle"
-- Elle giriş geri geldi: çizelgeyi kendiniz yazabilir veya yüklü çizelgeyi düzeltebilirsiniz
+- Programın yeni adı: NöbetGörev (Nöbet Çizelgesi ve Öğretmen Görevlendirme). Masaüstü kısayolu "NöbetGörev" olur, eski kısayol kaldırılır; verileriniz korunur
+- Yeni, daha etkili simge
+- İlk açılışta (başka bir okula kurulduğunda) önce okul bilgileri ve logo sorulur, sonra diğer adımlar gelir
+- Bütün açılır kutularda, tarih ve sayı kutularında ok işaretleri görünür
+- Fare tekerleği sayfayı kaydırır; tıklanmamış açılır kutuların değerini değiştirmez
+- Görünüm ayarları: renk kutucuklarıyla 12 tema rengi, Açık/Koyu, yazı tipi, yazı boyutu, satır aralığı, köşe yuvarlaklığı (düğmelerle seçim)
 
-Sürüm 1.8.0'daki yenilikler (adalet)
+Nöbet çizelgesi (otomatik oluşturma):
+- Kurallar her zaman önce gelir: sabitlenen gün / gün kısıtı, "dersi olmayan güne yazma" seçeneğini geçersiz kılar
+- Nöbet yerleri yetmiyorsa açık uyarı ve "Herkese haftada 1 nöbet yetecek kadar yer ayarla" düğmesi
+- Nöbet verilmeyenlerin yanında sebebi yazar (yer yetmedi, muaf, kurallar çakışıyor…)
+- Düzenleme listesi nöbet günlerine göre sıralı
 
-Görevlendirme daha adil:
-- Aynı gün içinde verilen dersler anında sayılır; bir nöbetçiye aynı gün üst üste yığılmaz
-- Nöbetmatik, bu yıl çok boş derse girmiş öğretmenleri geçmişte daha sakin geçen günlere, az girenleri yoğun günlere yerleştirir; aylar içinde fark kapanır
-
-Aylık rapor herkese gösterilebilir:
-- Adalet göstergesi kaydedilen her görevi tek tek denetler: "o saatte boş olan nöbetçiler arasından en az derse girmiş olan mı seçildi?" Hepsi kurala uygunsa "✅ Adil — her görevde sırası gelen öğretmen seçildi"; elle yapılan sıra dışı seçimler varsa sayısı ve kimler olduğu yazılır
-- Fark varsa sebebi açıklanır (ör. hangi gün daha çok öğretmen gelmedi)
-- Sütunlar: Nöbet günü · Derse girebileceği boş saat · Nöbetçiyken girdiği · Nöbetçi değilken girdiği · Toplam
-- Dönem: seçilen ay veya eğitim yılı (Eylül'den bu yana)
-- "Raporu yazdır": logo, okul adı, dönem, adalet açıklaması, kural metni ve imza yerleriyle panoya asılabilir çıktı; Excel'e aktarma
+Rapor: görevlendirme yoksa (ör. silindiyse) tablo boş görünür; "Nöbetçi olduğu gün (çizelgeye göre)" sütunu açıkça adlandırıldı.

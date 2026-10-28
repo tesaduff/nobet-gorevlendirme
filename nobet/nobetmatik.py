@@ -57,6 +57,7 @@ class Result:
     weeks: list                        # [(pazartesi, [tarih, ...])]
     warnings: list = field(default_factory=list)
     unassigned: list = field(default_factory=list)
+    reasons: dict = field(default_factory=dict)   # öğretmen -> neden nöbet verilmedi
 
 
 def month_weeks(month):
@@ -125,21 +126,26 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
     capacity = sum(n for _p, n in places)
     if not capacity:
         return Result({d: [] for d in range(5)}, [], month_weeks(cfg.month),
-                      ["Nöbet yeri girilmedi."], [])
+                      ["Nöbet yeri girilmedi."], list(cfg.teachers))
     pool = [t for t in cfg.teachers if t not in cfg.exempt]
     fixed_day = {f["teacher"]: int(f["day"]) for f in cfg.fixed if f.get("teacher") in pool}
     fixed_place = {f["teacher"]: f.get("place") or "" for f in cfg.fixed
                    if f.get("teacher") in pool and f.get("place")}
 
     def allowed(t):
-        days = set(range(5))
-        if cfg.skip_free_days and t in schedule:
-            days &= {d for d in range(5) if lesson_count(schedule, t, d) > 0}
-        if cfg.allowed_days.get(t):
-            days &= {int(d) for d in cfg.allowed_days[t]}
+        # Kurallar her zaman önce gelir: sabitlenen gün / gün kısıtı, "dersi olmayan güne
+        # yazma" seçeneğini geçersiz kılar.
         if t in fixed_day:
-            days &= {fixed_day[t]}
-        return days
+            return {fixed_day[t]}
+        lesson_days = {d for d in range(5) if lesson_count(schedule, t, d) > 0}
+        if cfg.allowed_days.get(t):
+            days = {int(d) for d in cfg.allowed_days[t]}
+            if cfg.skip_free_days and days & lesson_days:
+                days &= lesson_days
+            return days
+        if cfg.skip_free_days and t in schedule and lesson_days:
+            return lesson_days
+        return set(range(5))
 
     # Kapasite yetmezse dışarıda kalanlar: bu yıl en çok nöbet tutanlar, eşitse haftalık ders
     # yükü en ağır olanlar. Bir sonraki ay geçmiş sayısı az olduğu için önce onlara verilir.
@@ -147,6 +153,7 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
     weekly = {t: len(schedule.get(t, {})) for t in pool}
     pool.sort(key=lambda t: (history.get(t, 0), weekly[t], normalize(t)))
     unassigned = []
+    reasons = {}
     if len(pool) > total_slots:
         keep = set(fixed_day) | {t for pair in cfg.together for t in pair}
         extra = [t for t in pool if t not in keep][::-1]
@@ -154,6 +161,7 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
             t = extra.pop(0)
             pool.remove(t)
             unassigned.append(t)
+            reasons[t] = "Yer yetmedi (gelecek ay önceliği var)"
         warnings.append(f"Nöbet yeri yetersiz (haftada {total_slots} yer): {len(unassigned)} "
                         "öğretmene bu ay nöbet verilmedi — bu yıl en çok nöbet tutanlar, eşitse "
                         "ders yükü en ağır olanlar. Gelecek ay önce onlara verilir. Yer sayısını "
@@ -210,6 +218,9 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
                    else "uygun günlerde yer kalmadı")
             warnings.append(f"{names}: {why}.")
             unassigned.extend(units[r])
+            for t in units[r]:
+                reasons[t] = ("Kurallar çakışıyor" if not unit_allowed(r)
+                              else "Uygun günlerde yer kalmadı")
     if cfg.per_week >= 2:
         for r in sorted(units, key=lambda r: (history.get(units[r][0], 0), normalize(units[r][0]))):
             if unit_days[r]:
@@ -220,10 +231,13 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
                         "'Gerekirse haftada 2 nöbet' seçeneğini açabilirsiniz.")
 
     entries, weeks = build_entries(cfg, by_day)
+    for t, why in cfg.exempt.items():
+        if t in cfg.teachers:
+            reasons[t] = "Muaf" + (f" ({why})" if why else "")
     for t in pool:
         if t not in unassigned and not any(t in by_day[d] for d in range(5)):
             unassigned.append(t)
-    return Result(by_day, entries, weeks, warnings, unassigned)
+    return Result(by_day, entries, weeks, warnings, unassigned, reasons)
 
 
 def build_entries(cfg, by_day):

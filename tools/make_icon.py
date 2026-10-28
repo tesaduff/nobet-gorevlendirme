@@ -14,66 +14,79 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "assets")
 
 
 def draw(size=512):
+    """Sade ve güçlü simge: takvim sayfası (nöbet çizelgesi) + kalın onay (görevlendirme)
+    + köşede kalkan (nöbet). Küçük boyutta da okunacak kadar az ayrıntı."""
     img = QImage(size, size, QImage.Format_ARGB32)
     img.fill(Qt.transparent)
     p = QPainter(img)
     p.setRenderHint(QPainter.Antialiasing)
     s = size / 512
 
-    # Zemin: yuvarlak köşeli kare, mavi -> turkuaz
+    # Zemin: canlı geçiş + üstte hafif parlama
     g = QLinearGradient(0, 0, size, size)
-    g.setColorAt(0, QColor("#2563eb"))
-    g.setColorAt(1, QColor("#0d9488"))
+    g.setColorAt(0, QColor("#7c3aed"))
+    g.setColorAt(1, QColor("#2563eb"))
     p.setPen(Qt.NoPen)
     p.setBrush(QBrush(g))
-    p.drawRoundedRect(QRectF(16 * s, 16 * s, 480 * s, 480 * s), 112 * s, 112 * s)
+    p.drawRoundedRect(QRectF(12 * s, 12 * s, 488 * s, 488 * s), 116 * s, 116 * s)
+    shine = QLinearGradient(0, 0, 0, 260 * s)
+    shine.setColorAt(0, QColor(255, 255, 255, 60))
+    shine.setColorAt(1, QColor(255, 255, 255, 0))
+    p.setBrush(QBrush(shine))
+    p.drawRoundedRect(QRectF(12 * s, 12 * s, 488 * s, 250 * s), 116 * s, 116 * s)
 
-    # Pano
-    p.setBrush(QColor(0, 0, 0, 40))
-    p.drawRoundedRect(QRectF(120 * s, 104 * s, 272 * s, 328 * s), 34 * s, 34 * s)
+    # Takvim sayfası (gölgeli)
+    page = QRectF(96 * s, 116 * s, 320 * s, 300 * s)
+    p.setBrush(QColor(15, 23, 42, 70))
+    p.drawRoundedRect(page.translated(0, 12 * s), 44 * s, 44 * s)
     p.setBrush(QColor("white"))
-    p.drawRoundedRect(QRectF(112 * s, 94 * s, 272 * s, 328 * s), 34 * s, 34 * s)
-    # Kıskaç
-    p.setBrush(QColor("#1e3a8a"))
-    p.drawRoundedRect(QRectF(184 * s, 70 * s, 128 * s, 54 * s), 22 * s, 22 * s)
-    p.setBrush(QColor("white"))
-    p.drawEllipse(QRectF(236 * s, 82 * s, 24 * s, 24 * s))
-
-    # Liste: 3 satır, ilk ikisi onaylı
-    for i, done in enumerate((True, True, False)):
-        y = (172 + i * 78) * s
-        box = QRectF(146 * s, y, 50 * s, 50 * s)
-        if done:
-            p.setPen(Qt.NoPen)
-            p.setBrush(QColor("#10b981"))
-            p.drawRoundedRect(box, 12 * s, 12 * s)
-            pen = QPen(QColor("white"), 11 * s, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-            p.setPen(pen)
-            p.setBrush(Qt.NoBrush)
-            path = QPainterPath()
-            path.moveTo(QPointF(158 * s, y + 26 * s))
-            path.lineTo(QPointF(168 * s, y + 36 * s))
-            path.lineTo(QPointF(186 * s, y + 14 * s))
-            p.drawPath(path)
-        else:
-            p.setPen(QPen(QColor("#94a3b8"), 7 * s))
-            p.setBrush(Qt.NoBrush)
-            p.drawRoundedRect(box, 12 * s, 12 * s)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#cbd5e1") if done else QColor("#e2e8f0"))
-        p.drawRoundedRect(QRectF(214 * s, y + 10 * s, 136 * s, 14 * s), 7 * s, 7 * s)
-        p.drawRoundedRect(QRectF(214 * s, y + 32 * s, 92 * s, 12 * s), 6 * s, 6 * s)
-
-    # Saat rozeti (sağ alt)
-    p.setPen(Qt.NoPen)
-    p.setBrush(QColor("#f59e0b"))
-    p.drawEllipse(QRectF(318 * s, 318 * s, 150 * s, 150 * s))
-    p.setBrush(QColor("white"))
-    p.drawEllipse(QRectF(340 * s, 340 * s, 106 * s, 106 * s))
-    pen = QPen(QColor("#b45309"), 12 * s, Qt.SolidLine, Qt.RoundCap)
+    p.drawRoundedRect(page, 44 * s, 44 * s)
+    # Turuncu üst şerit
+    head = QPainterPath()
+    head.addRoundedRect(QRectF(96 * s, 116 * s, 320 * s, 96 * s), 44 * s, 44 * s)
+    cut = QPainterPath()
+    cut.addRect(QRectF(96 * s, 170 * s, 320 * s, 42 * s))
+    p.setBrush(QColor("#f97316"))
+    p.drawPath(head.united(cut))
+    # Halkalar
+    for x in (176, 336):
+        p.setBrush(QColor("#1e293b"))
+        p.drawRoundedRect(QRectF((x - 15) * s, 84 * s, 30 * s, 76 * s), 15 * s, 15 * s)
+    # Kalın onay işareti
+    pen = QPen(QColor("#16a34a"), 50 * s, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
     p.setPen(pen)
-    p.drawLine(QPointF(393 * s, 393 * s), QPointF(393 * s, 357 * s))
-    p.drawLine(QPointF(393 * s, 393 * s), QPointF(420 * s, 408 * s))
+    p.setBrush(Qt.NoBrush)
+    check = QPainterPath()
+    check.moveTo(QPointF(174 * s, 314 * s))
+    check.lineTo(QPointF(236 * s, 368 * s))
+    check.lineTo(QPointF(340 * s, 254 * s))
+    p.drawPath(check)
+
+    # Kalkan rozeti (sağ alt)
+    p.setPen(QPen(QColor("white"), 14 * s))
+    p.setBrush(QColor("#facc15"))
+    shield = QPainterPath()
+    cx, top = 388 * s, 300 * s
+    shield.moveTo(cx, top)
+    shield.cubicTo(cx + 34 * s, top + 18 * s, cx + 58 * s, top + 20 * s, cx + 70 * s, top + 20 * s)
+    shield.lineTo(cx + 70 * s, top + 80 * s)
+    shield.cubicTo(cx + 70 * s, top + 124 * s, cx + 36 * s, top + 148 * s, cx, top + 164 * s)
+    shield.cubicTo(cx - 36 * s, top + 148 * s, cx - 70 * s, top + 124 * s, cx - 70 * s, top + 80 * s)
+    shield.lineTo(cx - 70 * s, top + 20 * s)
+    shield.cubicTo(cx - 58 * s, top + 20 * s, cx - 34 * s, top + 18 * s, cx, top)
+    shield.closeSubpath()
+    p.drawPath(shield)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor("#b45309"))
+    star = QPainterPath()
+    import math
+    for i in range(10):
+        r = (30 if i % 2 == 0 else 13) * s
+        ang = -math.pi / 2 + i * math.pi / 5
+        pt = QPointF(cx + r * math.cos(ang), top + 84 * s + r * math.sin(ang))
+        star.moveTo(pt) if i == 0 else star.lineTo(pt)
+    star.closeSubpath()
+    p.drawPath(star)
     p.end()
     return img
 

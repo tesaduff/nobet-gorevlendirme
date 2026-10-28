@@ -120,6 +120,8 @@ class NobetmatikPage(QWidget):
         rem.clicked.connect(self._remove_place)
         self.cap_info = QLabel()
         self.cap_info.setWordWrap(True)
+        self.fit = variant(QPushButton("Herkese haftada 1 nöbet yetecek kadar yer ayarla"), "primary")
+        self.fit.clicked.connect(self._fit_capacity)
         h = QHBoxLayout()
         h.addWidget(add)
         h.addWidget(rem)
@@ -134,10 +136,12 @@ class NobetmatikPage(QWidget):
         v.addWidget(self.places, 1)
         v.addLayout(h)
         v.addWidget(self.cap_info)
+        v.addWidget(self.fit, 0, Qt.AlignLeft)
         return p
 
     def _page_options(self):
         self.pw1 = QRadioButton("Herkes haftada yalnızca 1 nöbet tutsun")
+        self.pw1.toggled.connect(lambda _v: self._update_capacity() if self.places.rowCount() else None)
         self.pw2 = QRadioButton("Yer artarsa bazı öğretmenler haftada 2 nöbet tutabilsin")
         grp = QButtonGroup(self)
         grp.addButton(self.pw1)
@@ -417,9 +421,36 @@ class NobetmatikPage(QWidget):
         c = self._collect()
         per_day = c.capacity()
         n = len([t for t in c.teachers if t not in c.exempt])
-        need = "yeterli" if per_day * 5 >= n else "yetersiz — bazı öğretmenlere bu ay nöbet düşmez"
-        self.cap_info.setText(f"Günde <b>{per_day}</b>, haftada <b>{per_day * 5}</b> nöbet yeri var; "
-                              f"nöbet tutacak <b>{n}</b> öğretmen var ({need}).")
+        weekly = per_day * 5 * (2 if c.per_week >= 2 else 1)
+        if per_day * 5 >= n:
+            self.cap_info.setText(f"✅ Günde <b>{per_day}</b>, haftada <b>{per_day * 5}</b> nöbet yeri; "
+                                  f"nöbet tutacak <b>{n}</b> öğretmen. Herkese haftada 1 nöbet düşer.")
+            self.cap_info.setStyleSheet("")
+            self.fit.setVisible(per_day * 5 - n >= 5)
+            self.fit.setText("Yer sayısını öğretmen sayısına göre ayarla")
+        else:
+            self.cap_info.setText(f"⚠ Yer yetmiyor: haftada <b>{per_day * 5}</b> nöbet yeri var ama "
+                                  f"<b>{n}</b> öğretmen nöbet tutacak. <b>{n - per_day * 5}</b> "
+                                  "öğretmene bu ay nöbet düşmez. Kişi sayılarını artırın ya da "
+                                  "aşağıdaki düğmeye basın.")
+            self.cap_info.setStyleSheet("color:#dc2626; font-weight:600")
+            self.fit.setVisible(True)
+            self.fit.setText("Herkese haftada 1 nöbet yetecek kadar yer ayarla")
+        del weekly
+
+    def _fit_capacity(self):
+        """Kişi sayılarını, herkese haftada tam 1 nöbet düşecek şekilde yerlere paylaştırır."""
+        import math
+        c = self._collect()
+        n = len([t for t in c.teachers if t not in c.exempt])
+        rows = self.places.rowCount()
+        if not rows:
+            return
+        per_day = max(rows, math.ceil(n / 5))
+        base, extra = divmod(per_day, rows)
+        for r in range(rows):
+            self.places.cellWidget(r, 1).setValue(base + (1 if r < extra else 0))
+        self._update_capacity()
 
     def _fill_rules(self):
         self.rules_t.setRowCount(len(self.rules))
@@ -472,8 +503,9 @@ class NobetmatikPage(QWidget):
 
     # ------------------------------------------------------------ elle düzenleme
     def _page_edit(self):
-        self.edit_t = QTableWidget(0, 3)
-        self.edit_t.setHorizontalHeaderLabels(["Öğretmen", "Nöbet günü", "O gün kaç dersi var"])
+        self.edit_t = QTableWidget(0, 4)
+        self.edit_t.setHorizontalHeaderLabels(["Öğretmen", "Nöbet günü", "O gün dersi",
+                                               "Not"])
         U._stretch(self.edit_t, 0)
         self.edit_t.verticalHeader().hide()
         self.edit_t.setSelectionMode(QAbstractItemView.NoSelection)
@@ -500,7 +532,8 @@ class NobetmatikPage(QWidget):
         if not self.result:
             return
         day_of = {t: d for d, ts in self.result.by_day.items() for t in ts}
-        teachers = sorted(set(day_of) | set(self.result.unassigned), key=normalize)
+        teachers = sorted(set(day_of) | set(self.result.unassigned),
+                          key=lambda t: (day_of.get(t, 9), normalize(t)))
         self.edit_t.setRowCount(len(teachers))
         for r, t in enumerate(teachers):
             self.edit_t.setItem(r, 0, U._item(t))
@@ -512,8 +545,13 @@ class NobetmatikPage(QWidget):
             combo.currentIndexChanged.connect(lambda _i, who=t, cb=combo: self._move(who, cb))
             self.edit_t.setCellWidget(r, 1, combo)
             d = day_of.get(t)
-            self.edit_t.setItem(r, 2, U._item(str(lesson_count(self.schedule, t, d))
+            self.edit_t.setItem(r, 2, U._item(f"{lesson_count(self.schedule, t, d)} ders"
                                               if d is not None else "—"))
+            why = "" if d is not None else self.result.reasons.get(t, "Yer yetmedi")
+            note = U._item(why)
+            if why:
+                note.setBackground(theme.YELLOW)
+            self.edit_t.setItem(r, 3, note)
 
     def _move(self, teacher, combo):
         note = move_teacher(self.cfg, self.result, self.schedule, teacher, combo.currentData())
@@ -521,8 +559,9 @@ class NobetmatikPage(QWidget):
                                f"✅ {teacher} için nöbet günü güncellendi.")
         r = next(i for i in range(self.edit_t.rowCount()) if self.edit_t.item(i, 0).text() == teacher)
         d = combo.currentData()
-        self.edit_t.setItem(r, 2, U._item(str(lesson_count(self.schedule, teacher, d))
+        self.edit_t.setItem(r, 2, U._item(f"{lesson_count(self.schedule, teacher, d)} ders"
                                           if d is not None else "—"))
+        self.edit_t.setItem(r, 3, U._item("Elle değiştirildi"))
         self._show_week(self.week.currentIndex())
 
     def go(self, index):
@@ -582,7 +621,11 @@ class NobetmatikPage(QWidget):
             lines.append(f"{sum(1 for v in counts.values() if v > 1)} öğretmen haftada 2 nöbet tutuyor.")
         lines += [f"<span style='color:#d97706'>⚠ {w}</span>" for w in self.result.warnings]
         if self.result.unassigned:
-            lines.append("Bu ay nöbet verilmeyenler: " + ", ".join(self.result.unassigned))
+            groups = {}
+            for t in self.result.unassigned:
+                groups.setdefault(self.result.reasons.get(t, "Yer yetmedi"), []).append(t)
+            for why, names in groups.items():
+                lines.append(f"<b>Nöbet verilmeyenler — {why}:</b> " + ", ".join(names))
         lines.append("Beğenmezseniz <b>Yeniden dağıt</b>'a basın ya da <b>İleri</b> ile bir "
                      "sonraki adımda günleri elle değiştirin.")
         self.res_info.setText("<br>".join(lines))

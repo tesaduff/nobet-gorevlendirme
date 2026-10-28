@@ -1,10 +1,10 @@
-﻿; Nöbetçi Öğretmen Görevlendirme — Windows kurulum betiği (Inno Setup 6)
+﻿; NöbetGörev — Windows kurulum betiği (Inno Setup 6)
 ; GitHub Actions derler: ISCC /DMyAppVersion=1.2.3 installer.iss
 
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
-#define MyAppName "Nöbetçi Öğretmen Görevlendirme"
+#define MyAppName "NöbetGörev"
 #define MyAppExe "NobetGorevlendirme.exe"
 
 [Setup]
@@ -41,6 +41,9 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 [InstallDelete]
 ; Eski sürümün kütüphaneleri yenileriyle karışmasın
 Type: filesandordirs; Name: "{app}\_internal"
+; Programın eski adıyla ("Nöbetçi Öğretmen Görevlendirme") oluşturulan kısayollar
+Type: files; Name: "{autodesktop}\Nöbetçi Öğretmen Görevlendirme.lnk"
+Type: files; Name: "{autoprograms}\Nöbetçi Öğretmen Görevlendirme.lnk"
 
 [Files]
 Source: "dist\NobetGorevlendirme\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

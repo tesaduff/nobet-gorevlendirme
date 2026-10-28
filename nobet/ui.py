@@ -23,7 +23,7 @@ from .parse_duty import DutyEntry, is_admin_place, parse_duty
 from .parse_schedule import parse_schedule
 from .reader import ReadError, read_document
 from .scheduler import KIND_LABELS, options_for, plan_day, teachers_with_lessons
-from .version import __version__
+from .version import APP_NAME, APP_TAGLINE, __version__
 
 STATUSES = ["Okulda", "Raporlu", "İzinli", "Görevli", "Sevkli", "Kurs / Seminer", "Diğer…"]
 OTHER = "Diğer…"
@@ -1182,7 +1182,7 @@ class ScheduleTab(QWidget):
                                       "müdür yardımcıları) burada işaretleyin.")
         elif admins:
             self.admins_label.setText("<b>" + ", ".join(admins) + "</b><br>Bu kişilere otomatik "
-                                      "ders görevlendirmesi ve Nöbetmatik'te nöbet verilmez; "
+                                      "ders görevlendirmesi ve otomatik nöbet verilmez; "
                                       "görevlendirme ekranında elle seçilebilirler.")
         else:
             self.admins_label.setText("<span style='color:#dc2626'><b>Henüz idareci "
@@ -1342,8 +1342,8 @@ class DutyTab(QWidget):
         self.months.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.months.setSelectionMode(QAbstractItemView.SingleSelection)
         self.months.itemSelectionChanged.connect(self._show)
-        # Üç yol: Nöbetmatik ile oluştur / hazır çizelgeyi yükle / elle gir
-        auto = variant(QPushButton("⚙  Nöbetmatik ile oluştur\n"
+        # Üç yol: otomatik oluştur / hazır çizelgeyi yükle / elle gir
+        auto = variant(QPushButton("⚙  Otomatik oluştur\n"
                                    "     Program adil dağıtsın"), "step")
         auto.clicked.connect(lambda: self.open_nobetmatik())
         load = variant(QPushButton("📄  Hazır çizelgem var\n"
@@ -1417,7 +1417,7 @@ class DutyTab(QWidget):
         self.steps.addWidget(self.matik)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(page_header("2  Nöbetmatik",
+        v.addWidget(page_header("2  Nöbet Çizelgesi",
                                 "Ders programındaki öğretmenlerden her ay adil bir nöbet çizelgesi "
                                 "oluşturun; görevlendirme bu çizelgeyi kullanır."))
         v.addWidget(self.steps, 1)
@@ -1425,7 +1425,7 @@ class DutyTab(QWidget):
 
     def open_nobetmatik(self, month=None):
         if not self.db.schedule_versions():
-            _info(self, "Önce 1. adımda ders programını yükleyin; Nöbetmatik öğretmenleri ve "
+            _info(self, "Önce 1. adımda ders programını yükleyin; otomatik dağıtım öğretmenleri ve "
                         "derslerini oradan alır.")
             return
         self.win.tabs.setCurrentWidget(self)
@@ -1574,8 +1574,8 @@ class DutyTab(QWidget):
 class ReportTab(QWidget):
     """Adalet raporu: herkese gösterildiğinde dağıtımın adil olduğu açıkça görülsün."""
 
-    HEADERS = ["Öğretmen", "Nöbet günü", "Derse girebileceği\nboş saat", "Nöbetçiyken\ngirdiği",
-               "Nöbetçi değilken\ngirdiği", "Toplam", ""]
+    HEADERS = ["Öğretmen", "Nöbetçi olduğu gün\n(çizelgeye göre)", "Derse girebileceği\nboş saat",
+               "Nöbetçiyken\ngirdiği", "Nöbetçi değilken\ngirdiği", "Toplam", ""]
 
     def __init__(self, win):
         super().__init__()
@@ -1663,8 +1663,13 @@ class ReportTab(QWidget):
         rows = sorted(((t, v) for t, v in self.stats.items()
                        if t != "__meta__" and (v["days"] or v["assigned"])),
                       key=lambda x: (-x[1]["assigned"], normalize(x[0])))
+        if not any(v["assigned"] for _t, v in rows):
+            rows = []   # görevlendirme yoksa (ör. silindiyse) tablo boş kalır
         self.rows = rows
         verdict, color, lines = export.fairness_summary(self.stats)
+        if not rows:
+            verdict, lines = "Bu dönemde kayıtlı görevlendirme yok", [
+                "Görevlendirme yaptıkça bu tablo dolar. Silinen görevlendirmeler sayılmaz."]
         self.verdict.setText(f"{title}:  {verdict}")
         self.verdict.setStyleSheet(f"font-size:14pt; font-weight:700; color:{color}")
         total = sum(v["assigned"] for _t, v in rows)
@@ -1819,33 +1824,59 @@ class SettingsTab(QWidget):
         h0.addWidget(edit_school, 0, Qt.AlignTop)
         l0.addLayout(h0)
 
-        # Görünüm
-        self.accent = QComboBox()
-        self.accent.addItems(list(theme.ACCENTS))
-        self.accent.setCurrentText(self.db.get_setting("theme_accent", "Mor"))
-        self.accent.setFixedWidth(180)
-        self.dark = QCheckBox("Koyu görünüm")
-        self.dark.setChecked(self.db.get_setting("theme_dark", "0") == "1")
-        self.accent.currentTextChanged.connect(self._theme_changed)
-        self.dark.toggled.connect(self._theme_changed)
-        self.font_size = QComboBox()
-        self.font_size.addItems(list(theme.FONT_SIZES))
-        self.font_size.setCurrentText(self.db.get_setting("theme_font", "Normal"))
-        self.font_size.setFixedWidth(180)
-        self.font_size.currentTextChanged.connect(self._theme_changed)
-        self.density = QComboBox()
-        self.density.addItems(list(theme.DENSITIES))
-        self.density.setCurrentText(self.db.get_setting("theme_density", "Normal"))
-        self.density.setFixedWidth(180)
-        self.density.currentTextChanged.connect(self._theme_changed)
+        # Görünüm: renk kutucukları ve seçenek düğmeleri (açılır liste yerine tıkla-seç)
         gt, lt = card("Görünüm (tasarım)")
+        self.accent_name = self.db.get_setting("theme_accent", "Mor")
+        self.swatches = {}
+        sw = QHBoxLayout()
+        sw.setSpacing(8)
+        for name, (color, *_rest) in theme.ACCENTS.items():
+            b = QPushButton()
+            b.setFixedSize(38, 38)
+            b.setToolTip(name)
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(lambda _c=False, n=name: self._pick_accent(n))
+            self.swatches[name] = (b, color)
+            sw.addWidget(b)
+        sw.addStretch()
+        self._paint_swatches()
+
+        def choices(key, options, default):
+            box = QHBoxLayout()
+            box.setSpacing(6)
+            group = []
+            current = self.db.get_setting(key, default)
+            for opt in options:
+                b = QPushButton(opt)
+                b.setCheckable(True)
+                b.setChecked(opt == current)
+                b.setCursor(Qt.PointingHandCursor)
+                b.setMinimumWidth(92)
+                group.append(b)
+                box.addWidget(b)
+            for b in group:
+                b.clicked.connect(lambda _c=False, btn=b, grp=group, k=key: self._choose(k, btn, grp))
+            box.addStretch()
+            self._style_choices(group)
+            return box
+
+        self.family = QComboBox()
+        self.family.addItems(theme.FONTS)
+        self.family.setCurrentText(self.db.get_setting("theme_family", "Segoe UI"))
+        self.family.setFixedWidth(220)
+        self.family.currentTextChanged.connect(
+            lambda v: (self.db.set_setting("theme_family", v), self._theme_changed()))
         ft = QFormLayout()
-        ft.addRow("Tema rengi:", self.accent)
-        ft.addRow("Yazı boyutu:", self.font_size)
-        ft.addRow("Satır aralığı:", self.density)
-        ft.addRow("", self.dark)
+        ft.setVerticalSpacing(10)
+        ft.addRow("Tema rengi:", sw)
+        ft.addRow("Görünüm:", choices("theme_mode", ["Açık", "Koyu"],
+                                      "Koyu" if self.db.get_setting("theme_dark") == "1" else "Açık"))
+        ft.addRow("Yazı tipi:", self.family)
+        ft.addRow("Yazı boyutu:", choices("theme_font", list(theme.FONT_SIZES), "Normal"))
+        ft.addRow("Satır aralığı:", choices("theme_density", list(theme.DENSITIES), "Normal"))
+        ft.addRow("Köşeler:", choices("theme_radius", list(theme.RADII), "Normal"))
         lt.addLayout(ft)
-        note = QLabel("Yazı boyutu ve satır aralığı tablolara sayfa yenilenince uygulanır.")
+        note = QLabel("Seçim hemen uygulanır. Satır aralığı tablolara sayfa yenilenince yansır.")
         note.setObjectName("subtitle")
         lt.addWidget(note)
 
@@ -1866,11 +1897,11 @@ class SettingsTab(QWidget):
         l1.addLayout(row(QLabel("Bir nöbetçiye günde en fazla:"), self.cap, stretch_first=False))
 
         # Yeni ay
-        self.month_alert = QCheckBox("Yeni ay başlayınca uyar ve Nöbetmatik'i açmayı öner")
+        self.month_alert = QCheckBox("Yeni ay başlayınca uyar ve yeni nöbet çizelgesi oluşturmayı öner")
         self.month_alert.setChecked(self.db.get_setting("month_alert", "1") == "1")
         self.month_alert.toggled.connect(
             lambda v: self.db.set_setting("month_alert", "1" if v else "0"))
-        new_month = QPushButton("⚙  Yeni ayı şimdi başlat (Nöbetmatik)")
+        new_month = QPushButton("⚙  Yeni ayı şimdi başlat (otomatik nöbet çizelgesi)")
         new_month.clicked.connect(lambda: win.duty.open_nobetmatik())
         gm, lm = card("Yeni ay")
         mhint = QLabel("Program tarihi kontrol eder; yeni bir aya geçildiğinde o ayın nöbet "
@@ -1963,13 +1994,36 @@ class SettingsTab(QWidget):
         pm = QPixmap(logo_path()) if os.path.exists(logo_path()) else theme.app_icon().pixmap(64, 64)
         self.school_logo.setPixmap(pm.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
+    def _paint_swatches(self):
+        for name, (b, color) in self.swatches.items():
+            ring = "3px solid #0f172a" if name == self.accent_name else "2px solid transparent"
+            b.setStyleSheet(f"QPushButton {{ background:{color}; border:{ring}; "
+                            f"border-radius:19px; padding:0; }}")
+
+    def _pick_accent(self, name):
+        self.accent_name = name
+        self.db.set_setting("theme_accent", name)
+        self._paint_swatches()
+        self._theme_changed()
+
+    def _style_choices(self, group):
+        for b in group:
+            b.setProperty("variant", "primary" if b.isChecked() else "")
+            b.style().unpolish(b)
+            b.style().polish(b)
+
+    def _choose(self, key, btn, group):
+        for b in group:
+            b.setChecked(b is btn)
+        self._style_choices(group)
+        value = btn.text()
+        if key == "theme_mode":
+            self.db.set_setting("theme_dark", "1" if value == "Koyu" else "0")
+        self.db.set_setting(key, value)
+        self._theme_changed()
+
     def _theme_changed(self, *_):
-        self.db.set_setting("theme_accent", self.accent.currentText())
-        self.db.set_setting("theme_dark", "1" if self.dark.isChecked() else "0")
-        self.db.set_setting("theme_font", self.font_size.currentText())
-        self.db.set_setting("theme_density", self.density.currentText())
-        theme.apply(QApplication.instance(), self.accent.currentText(), self.dark.isChecked(),
-                    self.font_size.currentText(), self.density.currentText())
+        self.win.apply_theme()
         self.win.daily.refresh()
 
     def open_excel(self):
@@ -2007,7 +2061,7 @@ class SettingsTab(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self, db=None):
         super().__init__()
-        self.setWindowTitle(f"Nöbetçi Öğretmen Görevlendirme  v{__version__}")
+        self.setWindowTitle(f"{APP_NAME} — {APP_TAGLINE}  v{__version__}")
         self.resize(1440, 860)
         self.db = db or Database()
         self._workers = []
@@ -2015,6 +2069,7 @@ class MainWindow(QMainWindow):
             round_logo(QImage(logo_path())).save(logo_path())  # eski kare logoları yuvarlat
             self.db.set_setting("logo_round", "1")
         self._build()
+        QTimer.singleShot(300, self.first_run)
         QTimer.singleShot(800, self.check_new_month)
         self._month_timer = QTimer(self)  # program açık kalırsa ay değişimini de yakala
         self._month_timer.timeout.connect(self.check_new_month)
@@ -2023,7 +2078,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(2500, lambda: self.check_updates(silent=True))
 
     def _build(self):
-        self.tabs = theme.NavPages("Nöbet Görevlendirme", "Nöbetçi öğretmen görevlendirme")
+        self.tabs = theme.NavPages(APP_NAME, APP_TAGLINE)
         self.tabs.footer.setText(f"Sürüm {__version__}")
         self.daily = DailyTab(self)
         self.sched = ScheduleTab(self)
@@ -2032,7 +2087,7 @@ class MainWindow(QMainWindow):
         self.settings = SettingsTab(self)
         # Sıra: önce ders programı, sonra nöbet çizelgesi, sonra görevlendirme
         self.tabs.addTab(self.sched, "1   Ders Programı")
-        self.tabs.addTab(self.duty, "2   Nöbetmatik")
+        self.tabs.addTab(self.duty, "2   Nöbet Çizelgesi")
         self.tabs.addTab(self.daily, "3   Görevlendirme")
         self.tabs.addTab(self.report, "📊   Aylık Rapor")
         self.tabs.addTab(self.settings, "⚙   Ayarlar")
@@ -2041,6 +2096,16 @@ class MainWindow(QMainWindow):
         self.update_brand()
         self.go_first_step()
         self.statusBar().showMessage("Hazır.")
+
+    def first_run(self):
+        """İlk açılışta (başka bir okula kurulduğunda) önce okul bilgileri ve logo sorulur."""
+        if self.db.get_setting("school"):
+            return
+        _info(self, f"{APP_NAME}'e hoş geldiniz!\n\nÖnce okulunuzun bilgilerini girin: okul adı, "
+                    "il/ilçe, okul müdürü, müdür yardımcıları ve isterseniz logo. Sonra ders "
+                    "programını yükleyeceksiniz.", "Hoş geldiniz")
+        self.edit_school()
+        self.go_first_step()
 
     def go_first_step(self):
         """Eksik olan ilk adımı açar: ders programı → nöbet çizelgesi → görevlendirme."""
@@ -2070,7 +2135,7 @@ class MainWindow(QMainWindow):
         self.ask_admins()
         if not self.db.duty_months():
             _info(self, f"✅ {done}\n\nSıradaki adım: 2 — Nöbet çizelgesi.\n\n"
-                        "• Nöbetmatik ile oluşturabilir,\n• hazır çizelgenizi PDF/Excel olarak "
+                        "• otomatik oluşturabilir,\n• hazır çizelgenizi PDF/Excel olarak "
                         "yükleyebilir,\n• ya da elle girebilirsiniz.", "Sonraki adım")
             self.tabs.setCurrentWidget(self.duty)
         else:
@@ -2078,7 +2143,7 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentWidget(self.daily)
 
     def check_new_month(self, force=False):
-        """Yeni ay başladıysa (program açıkken de) uyarır ve Nöbetmatik'i açmayı önerir."""
+        """Yeni ay başladıysa (program açıkken de) uyarır ve yeni nöbet çizelgesini önerir."""
         if not force and self.db.get_setting("month_alert", "1") != "1":
             return
         if not self.db.schedule_versions():
@@ -2096,8 +2161,8 @@ class MainWindow(QMainWindow):
         box.setWindowTitle("Yeni ay")
         box.setText(f"<b>{export.month_tr(month)}</b> başladı.<br><br>Bu ay için yeni nöbet "
                     "çizelgesi gerekiyor. Ders programı değiştiyse önce yeni ders programını "
-                    "yükleyin, sonra Nöbetmatik ile bu ayın nöbetlerini dağıtın.")
-        matik_b = box.addButton("⚙  Nöbetmatik'i aç", QMessageBox.AcceptRole)
+                    "yükleyin, sonra bu ayın nöbetlerini otomatik dağıtın.")
+        matik_b = box.addButton("⚙  Nöbet çizelgesi oluştur", QMessageBox.AcceptRole)
         sched_b = box.addButton("Ders programını güncelle", QMessageBox.ActionRole)
         box.addButton("Sonra", QMessageBox.RejectRole)
         box.exec()
@@ -2106,6 +2171,9 @@ class MainWindow(QMainWindow):
         elif box.clickedButton() is sched_b:
             self.tabs.setCurrentWidget(self.sched)
             self.sched.load_file()
+
+    def apply_theme(self):
+        apply_saved_theme(QApplication.instance(), self.db)
 
     def school(self):
         return self.db.get_setting("school", "")
@@ -2127,9 +2195,9 @@ class MainWindow(QMainWindow):
     def update_brand(self):
         if not hasattr(self, "tabs"):
             return
-        name = self.school() or "Nöbet Görevlendirme"
+        name = self.school() or APP_NAME
         pm = QPixmap(logo_path()) if os.path.exists(logo_path()) else theme.app_icon().pixmap(96, 96)
-        self.tabs.set_brand(name, "Nöbetçi öğretmen görevlendirme", pm)
+        self.tabs.set_brand(name, f"{APP_NAME} · {APP_TAGLINE}", pm)
 
     def changed(self):
         self.daily.refresh()
@@ -2236,6 +2304,12 @@ class MainWindow(QMainWindow):
         self._start(w, done, failed)
 
 
+def apply_saved_theme(app, db):
+    theme.apply(app, db.get_setting("theme_accent", "Mor"), db.get_setting("theme_dark", "0") == "1",
+                db.get_setting("theme_font", "Normal"), db.get_setting("theme_density", "Normal"),
+                db.get_setting("theme_radius", "Normal"), db.get_setting("theme_family", "Segoe UI"))
+
+
 def _next_school_day(d):
     while d.weekday() > 4:
         d += dt.timedelta(days=1)
@@ -2253,10 +2327,9 @@ def run():
     import sys
     QLocale.setDefault(QLocale(QLocale.Turkish, QLocale.Turkey))
     app = QApplication(sys.argv)
-    app.setApplicationName("Nöbetçi Öğretmen Görevlendirme")
+    app.setApplicationName(APP_NAME)
     db = Database()
-    theme.apply(app, db.get_setting("theme_accent", "Mor"), db.get_setting("theme_dark", "0") == "1",
-                db.get_setting("theme_font", "Normal"), db.get_setting("theme_density", "Normal"))
+    apply_saved_theme(app, db)
     win = MainWindow(db)
     win.showMaximized()
     sys.exit(app.exec())

@@ -249,7 +249,7 @@ def write_records_xlsx(path, db, school=""):
                 ws.cell(ws.max_row, 2).number_format = "DD.MM.YYYY"
 
     if school:
-        wb.properties.title = f"{school} — Nöbetçi Öğretmen Görevlendirme Kayıtları"
+        wb.properties.title = f"{school} — NöbetGörev kayıtları"
     folder = os.path.dirname(path) or "."
     os.makedirs(folder, exist_ok=True)
     fd, tmp = tempfile.mkstemp(suffix=".xlsx", dir=folder)
@@ -369,7 +369,7 @@ def fairness_summary(stats):
         if per[hi] > per[lo] * 1.3:
             lines.append(f"Fark gün yükünden: <b>{DAYS[hi]}</b> günleri nöbetçi başına "
                          f"{per[hi]:.1f} boş ders düştü, <b>{DAYS[lo]}</b> günleri {per[lo]:.1f}. "
-                         "Bu gün yükü farkı Nöbetmatik'in sonraki aylarındaki gün değişimiyle dengelenir.")
+                         "Bu gün yükü farkı, otomatik nöbet çizelgesinin sonraki aylardaki gün değişimiyle dengelenir.")
     if not exc:
         return ("✅ Adil — her görevde sırası gelen öğretmen seçildi", "#059669",
                 [f"Kaydedilen <b>{total}</b> görevin hepsinde, o saatte boş olan nöbetçiler "
