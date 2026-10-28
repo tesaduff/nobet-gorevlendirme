@@ -262,8 +262,15 @@ def write_records_xlsx(path, db, school=""):
             os.remove(tmp)
 
 
-def duty_html(month, entries, info=None, has_logo=False, exempt=None, places=None):
-    """Nöbetmatik çizelgesinin resmî çıktısı: her hafta için Günler × Nöbet yerleri tablosu."""
+MARK = "\u2063"   # görünmez işaret: sayfalamada bölüm sınırlarını bulmak için
+
+
+def duty_html(month, entries, info=None, has_logo=False, exempt=None, places=None, breaks=()):
+    """Nöbetmatik çizelgesinin resmî çıktısı: her hafta için Günler × Nöbet yerleri tablosu.
+
+    breaks: önüne sayfa sonu konacak bölümlerin sırası (0.. haftalar, son sıra imzalar).
+    Her haftanın başlığı MARK ile başlar; imza bölümünün önünde ve arkasında da MARK vardır.
+    """
     import datetime as _dt
     e = html.escape
     info = info or {}
@@ -304,12 +311,14 @@ def duty_html(month, entries, info=None, has_logo=False, exempt=None, places=Non
                         f"<span style='color:#475569'>{d.strftime('%d.%m.%Y')}</span></td>"
                         + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
         head = "".join(f"<th>{e(c.upper())}</th>" for c in cols)
+        brk = "; page-break-before:always" if len(blocks) in breaks else ""
         blocks.append(
-            f"<p style='margin:10px 0 4px 0'><b>{title}</b></p>"
+            f"<p style='margin:10px 0 4px 0{brk}'>{MARK}<b>{title}</b></p>"
             "<table border=1 cellspacing=0 cellpadding=4 width=100% "
             "style='border-collapse:collapse; font-size:8.5pt'>"
             f"<tr style='background:#e2e8f0'><th width=14%>GÜNLER</th>{head}</tr>"
             + "".join(rows) + "</table>")
+    sign_break = len(blocks) in breaks
     logo = "<img src='logo' height=64>" if has_logo else ""
     school = info.get("school", "")
     city = info.get("school_city", "")
@@ -338,8 +347,9 @@ def duty_html(month, entries, info=None, has_logo=False, exempt=None, places=Non
 <p align=center style="margin:2px 0 6px 0">{span}</p>
 {''.join(blocks)}
 {ex}
-<br>
+<p style="margin:0{'; page-break-before:always' if sign_break else ''}">{MARK}</p>
 <table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
+<p style="margin:0">{MARK}</p>
 </body></html>"""
 
 

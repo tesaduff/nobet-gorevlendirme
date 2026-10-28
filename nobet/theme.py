@@ -24,6 +24,10 @@ ACCENTS = {
     "Zeytin": ("#4d7c0f", "#3f6212", "#f7fee7", "#1a2e05"),
 }
 RADII = {"Keskin": 3, "Normal": 8, "Yuvarlak": 14}
+# Arka plan: ad -> (açık zemin, koyu zemin); None = düz renk yerine tema renginden geçiş
+BACKGROUNDS = {"Sade": ("#f4f6fb", "#0f172a"), "Renk geçişli": (None, None),
+               "Sıcak": ("#f8f3ea", "#1c1917"), "Serin": ("#eaf1f8", "#0b1726"),
+               "Beyaz": ("#ffffff", "#111827")}
 FONTS = ["Segoe UI", "Calibri", "Arial", "Tahoma", "Verdana", "Trebuchet MS"]
 
 # Tablo satır renkleri: arayüz bu nesneleri kullanır, tema değişince yerinde güncellenir.
@@ -45,7 +49,7 @@ def app_icon():
     return QIcon(resource("icon.png"))
 
 
-def build_style(accent="Mor", dark=False, radius="Normal"):
+def build_style(accent="Mor", dark=False, radius="Normal", background="Sade"):
     global ACCENT, MUTED
     R = RADII.get(radius, 8)
     R2 = R + 4
@@ -58,6 +62,15 @@ def build_style(accent="Mor", dark=False, radius="Normal"):
     else:
         BG, CARD, BORDER, TEXT, MUTED = "#f4f6fb", "#ffffff", "#e2e8f0", "#1e293b", "#64748b"
         INPUT_BORDER, HOVER, HEAD, ALT = "#cbd5e1", "#f1f5f9", "#f8fafc", "#fafbfe"
+    plain, plain_dark = BACKGROUNDS.get(background, BACKGROUNDS["Sade"])
+    if plain is None:
+        # Sayfa zemini tema renginin açık tonundan yumuşakça açılır
+        PAGE_BG = (f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {a_soft}, stop:0.55 {BG}, "
+                   f"stop:1 {BG})")
+    else:
+        BG = plain_dark if dark else plain
+        PAGE_BG = BG
+    CHECK = resource("check_white.png").replace("\\", "/")
     ACCENT = a
     for color, value in zip((GREEN, YELLOW, RED, BLUE), _ROWS[dark]):
         color.setRgb(QColor(value).rgb())
@@ -71,7 +84,8 @@ def build_style(accent="Mor", dark=False, radius="Normal"):
 
 STYLE = """
 QWidget {{ color: {TEXT}; }}
-QMainWindow, QDialog, #page, QScrollArea#page > QWidget > QWidget {{ background: {BG}; }}
+QMainWindow, QDialog {{ background: {BG}; }}
+#page, QScrollArea#page > QWidget > QWidget {{ background: {PAGE_BG}; }}
 QToolTip {{ background: {TEXT}; color: white; border: none; padding: 6px; border-radius: 4px; }}
 
 /* Kartlar */
@@ -114,6 +128,8 @@ QPushButton[variant="step"] {{
 }}
 QPushButton[variant="step"]:hover {{ background: {a_soft}; border-color: {a}; }}
 
+QPushButton#choice {{ text-align: left; padding: 5px 10px; font-weight: 500; }}
+
 /* Giriş alanları */
 QLineEdit, QComboBox, QDateEdit, QSpinBox, QPlainTextEdit {{
     background: {CARD}; border: 1px solid {INPUT_BORDER}; border-radius: {R}px; padding: 5px 8px;
@@ -140,7 +156,26 @@ QComboBox QAbstractItemView {{
     background: {CARD}; border: 1px solid {BORDER}; selection-background-color: {a_soft};
     selection-color: {TEXT}; outline: none;
 }}
-QCheckBox {{ spacing: 8px; }}
+QCheckBox, QRadioButton {{ spacing: 8px; }}
+QCheckBox::indicator, QTableView::indicator, QListView::indicator {{
+    width: 18px; height: 18px; border: 2px solid {MUTED}; border-radius: 5px; background: {CARD};
+}}
+QCheckBox::indicator:hover, QTableView::indicator:hover, QListView::indicator:hover {{
+    border-color: {a};
+}}
+QCheckBox::indicator:checked, QTableView::indicator:checked, QListView::indicator:checked {{
+    background: {a}; border-color: {a}; image: url({CHECK});
+}}
+QCheckBox::indicator:disabled {{ background: {HEAD}; border-color: {BORDER}; }}
+QRadioButton::indicator {{
+    width: 14px; height: 14px; border: 2px solid {MUTED}; border-radius: 9px; background: {CARD};
+}}
+QRadioButton::indicator:hover {{ border-color: {a}; }}
+QRadioButton::indicator:checked {{
+    border-color: {a};
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0 {a},
+                                stop:0.55 {a}, stop:0.62 {CARD}, stop:1 {CARD});
+}}
 
 /* Tablolar ve listeler */
 QTableWidget, QListWidget#list {{
@@ -180,7 +215,7 @@ QPushButton#exit {{
 QPushButton#exit:hover {{ background: #dc2626; color: white; border-color: #dc2626; }}
 QListWidget#nav {{ background: transparent; border: none; outline: none; }}
 QListWidget#nav::item {{
-    color: #c7d2fe; padding: 11px 14px; margin: 2px 10px; border-radius: 8px; font-size: 10.5pt;
+    color: #c7d2fe; padding: 8px 14px; margin: 1px 10px; border-radius: 8px; font-size: 10.5pt;
 }}
 QListWidget#nav::item:hover {{ background: rgba(255, 255, 255, 0.08); color: white; }}
 QListWidget#nav::item:selected {{
@@ -200,7 +235,7 @@ QFrame#stat {{
     border-radius: {R2}px;
 }}
 QLabel#logoBox {{
-    background: {a_soft}; border: 2px dashed {a}; border-radius: 66px; color: {MUTED};
+    background: {a_soft}; border: 2px dashed {a}; border-radius: {R2}px; color: {MUTED};
 }}
 QLabel#stepOn {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a}, stop:1 {a_hover});
@@ -244,7 +279,7 @@ _guard = None
 
 
 def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal",
-          radius="Normal", family="Segoe UI"):
+          radius="Normal", family="Segoe UI", background="Sade"):
     global ROW_HEIGHT, _guard
     size = FONT_SIZES.get(font_size, 10)
     ROW_HEIGHT = int(DENSITIES.get(density, 36) * size / 10)
@@ -257,7 +292,7 @@ def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal",
     if _guard is None:
         app.setStyle("Fusion")
         app.setWindowIcon(app_icon())
-    style = build_style(accent, dark, radius)
+    style = build_style(accent, dark, radius, background)
     if app.styleSheet() != style:
         app.setStyleSheet(style)
     if _guard is None:
@@ -355,7 +390,7 @@ class NavPages(QWidget):
         sv.setContentsMargins(0, 22, 0, 16)
         sv.setSpacing(4)
         self.logo = QLabel()
-        self.logo.setFixedHeight(78)
+        self.logo.setFixedHeight(68)
         self.logo.setAlignment(Qt.AlignCenter)
         self.logo.setContentsMargins(0, 0, 0, 6)
         sv.addWidget(self.logo)
@@ -403,7 +438,7 @@ class NavPages(QWidget):
         self.brand.setText(title)
         self.brand_sub.setText(subtitle)
         if pixmap and not pixmap.isNull():
-            self.logo.setPixmap(pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo.setPixmap(pixmap.scaled(62, 62, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def addTab(self, widget, label, min_height=0):
         """Sayfayı kaydırılabilir alana koyar: küçük ekranlarda içerik sıkışmaz, kaydırılır."""
@@ -422,7 +457,7 @@ class NavPages(QWidget):
         self._widgets = getattr(self, "_widgets", []) + [widget]
         self.stack.addWidget(scroll)
         item = QListWidgetItem(label)
-        item.setSizeHint(QSize(0, int(ROW_HEIGHT * 1.25)))
+        item.setSizeHint(QSize(0, int(ROW_HEIGHT * 1.12)))
         self.nav.addItem(item)
         if self.nav.count() == 1:
             self.nav.setCurrentRow(0)

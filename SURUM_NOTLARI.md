@@ -1,4 +1,28 @@
-Sürüm 2.0.5
+Sürüm 2.1.0
+
+Görevlendirme:
+- Yeni "📋 Kayıtlar" sayfası: onaylanan her günün görevlendirmesi gün gün listelenir; açılıp değiştirilebilir, yazdırılabilir, silinebilir. Silinen gün istatistiklerden de düşülür (onaylayınca eklenir, silince çıkar)
+- Bugünün nöbetçileri adalet sırasıyla listelenir: Sıra ve bu yıl / bu ay girdiği boş ders sayısı görünür
+- İdareciler "o gün dersi olan öğretmenler" listesinde görünmez
+
+Nöbetmatik:
+- Yer yetmese de herkes nöbet tutar: fazladan nöbetçiler yerlere sırayla eklenir ("yer yetmedi" ile dışarıda kalan olmaz)
+- Nöbetçi idareciler elle seçilmez; müdür yardımcıları ve diğer idareciler günlere otomatik ve adil dağıtılır
+- Kurallarda "Sabitle" için "Herhangi bir gün" seçeneği (yalnızca yeri sabitlemek için)
+- Öğretmen listesinin üstünde "Hepsini işaretle" ve "Bütün işaretleri kaldır" düğmeleri
+
+Yazdırma:
+- Nöbet çizelgesinde haftalar iki sayfaya bölünmez: sığmayan hafta bütün olarak sonraki sayfaya geçer
+- Baskı önizlemede "📄 PDF olarak kaydet" düğmesi (nöbet çizelgesi, görevlendirme, rapor)
+
+Görünüm:
+- Onay kutuları ve seçenek düğmeleri belirgin (işaretli olan tema renginde, beyaz tikli)
+- Görünüm ayarlarında yeni "Arka plan" seçeneği: Sade, Renk geçişli, Sıcak, Serin, Beyaz
+- Görünüm değişikliği belirgin şekilde hızlandı (program daha az bellek kullanır)
+- Okul logosu kendi şeklini korur: kare logo kare, yuvarlak logo yuvarlak görünür (logoyu yeniden seçin)
+- Yeni ay başladığında program açılınca uyarır: Otomatik oluştur / PDF-Excel'den yükle / Elle gir
+
+Sürüm 2.0.5'teki yenilikler
 
 - Güncelleme penceresi: yenilikler kaydırılabilir kutuda, Evet / Hayır düğmeleri her zaman görünür
 

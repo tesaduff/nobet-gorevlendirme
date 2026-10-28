@@ -483,16 +483,32 @@ def test_nobetmatik_rules():
     assert all(e.weekday == 0 for e in res.entries if e.teacher == "IDARECI")
 
 
-def test_nobetmatik_shortage_uses_yearly_history():
+def test_nobetmatik_shortage_gives_everyone_duty():
+    """Yer yetmese de kimse dışarıda kalmaz; fazladan kişiler yerlere eklenir."""
     from nobet.nobetmatik import Config, distribute
     sched = _sched(7)
     cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1]])
-    history = {"T5": 9, "T6": 8}
-    res = distribute(cfg, sched, history)
+    res = distribute(cfg, sched, {"T5": 9, "T6": 8})
     assigned = {t for v in res.by_day.values() for t in v}
-    assert len(assigned) == 5 and set(res.unassigned) == {"T5", "T6"}
-    assert any("yetersiz" in w for w in res.warnings)
+    assert assigned == set(sched) and not res.unassigned
+    assert all(e.place == "Bahçe" for e in res.entries)
 
+
+def test_nobetmatik_fixed_place_any_day_and_admins():
+    from nobet.nobetmatik import ADMIN_PLACE, Config, distribute, distribute_admins
+    sched = _sched(10)
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1], ["Kantin", 1]],
+                 fixed=[{"teacher": "T3", "day": None, "place": "Kantin"}],
+                 admins=["A1", "A2"])
+    res = distribute(cfg, sched)
+    t3 = [e for e in res.entries if e.teacher == "T3"]
+    assert t3 and all(e.place == "Kantin" for e in t3)
+    by_admin = {}
+    for a in cfg.admins_by_day.values():
+        by_admin[a] = by_admin.get(a, 0) + 1
+    assert sorted(by_admin.values()) == [2, 3]
+    assert any(e.place == ADMIN_PLACE for e in res.entries)
+    assert distribute_admins([], sched) == {}
 
 def test_nobetmatik_two_per_week_fills_slots():
     from nobet.nobetmatik import Config, distribute

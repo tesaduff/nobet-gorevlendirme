@@ -1,8 +1,8 @@
 """Nöbetmatik ekranı: 5 adımda (İleri / Geri) aylık nöbet çizelgesi oluşturma."""
 import os
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QColor, QImage, QPageLayout, QTextDocument
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
                                QLineEdit, QPushButton, QRadioButton, QSpinBox, QStackedWidget,
@@ -103,9 +103,9 @@ class NobetmatikPage(QWidget):
         self.teach.verticalHeader().hide()
         self.teach.setSelectionMode(QAbstractItemView.NoSelection)
         self.teach.setMinimumHeight(140)
-        all_b = QPushButton("Tümünü seç")
+        all_b = QPushButton("☑  Hepsini işaretle")
         all_b.clicked.connect(lambda: self._check_all(True))
-        none_b = QPushButton("Hiçbirini seçme")
+        none_b = QPushButton("☐  Bütün işaretleri kaldır")
         none_b.clicked.connect(lambda: self._check_all(False))
         self.teach_info = QLabel()
         self.teach_info.setObjectName("subtitle")
@@ -114,16 +114,21 @@ class NobetmatikPage(QWidget):
         top.addWidget(QLabel("<b>Hangi ayın çizelgesi?</b>"))
         top.addWidget(self.month)
         top.addStretch()
-        top.addWidget(all_b)
-        top.addWidget(none_b)
         p = QWidget()
         v = QVBoxLayout(p)
         v.setContentsMargins(0, 0, 0, 0)
         v.addLayout(top)
         v.addWidget(self.teach_info)
+        tcol = QVBoxLayout()
+        bh = QHBoxLayout()
+        bh.addWidget(all_b)
+        bh.addWidget(none_b)
+        bh.addStretch()
+        tcol.addLayout(bh)
+        tcol.addWidget(self.teach, 1)
         tc = QHBoxLayout()
         tc.addStretch()
-        tc.addWidget(self.teach)
+        tc.addLayout(tcol)
         tc.addStretch()
         v.addLayout(tc, 1)
         return p
@@ -191,14 +196,15 @@ class NobetmatikPage(QWidget):
         l2 = QVBoxLayout(g2)
         for c in (self.skip_free, self.light, self.rotate):
             l2.addWidget(c)
-        self.admin_combos = []
-        g3 = QGroupBox("Nöbetçi idareci (isteğe bağlı)")
-        l3 = QFormLayout(g3)
-        for d in DAYS:
-            c = QComboBox()
-            c.setMinimumWidth(260)
-            self.admin_combos.append(c)
-            l3.addRow(d + ":", c)
+        self.use_admins = QCheckBox("Nöbetçi idareciyi de çizelgeye yaz — günlere otomatik ve "
+                                    "adil dağıtılır")
+        self.admin_info = QLabel()
+        self.admin_info.setWordWrap(True)
+        self.admin_info.setObjectName("subtitle")
+        g3 = QGroupBox("Nöbetçi idareci")
+        l3 = QVBoxLayout(g3)
+        l3.addWidget(self.use_admins)
+        l3.addWidget(self.admin_info)
         inner = QWidget()
         v = QVBoxLayout(inner)
         v.setContentsMargins(0, 0, 4, 0)
@@ -226,7 +232,9 @@ class NobetmatikPage(QWidget):
         ff = QHBoxLayout(f_fixed)
         ff.setContentsMargins(0, 0, 0, 0)
         self.r_day = QComboBox()
-        self.r_day.addItems(DAYS)
+        self.r_day.addItem("Herhangi bir gün", None)
+        for d, name in enumerate(DAYS):
+            self.r_day.addItem(name, d)
         self.r_place = QComboBox()
         self.r_place.setMinimumWidth(200)
         ff.addWidget(QLabel("Hangi gün:"))
@@ -406,11 +414,26 @@ class NobetmatikPage(QWidget):
             f"Ders programından {len(teachers)} öğretmen alındı (idareciler hariç). Nöbet "
             "tutmayacakların işaretini kaldırın. Muafiyetleri 4. adımda (Kurallar) mazeretiyle "
             "ekleyebilirsiniz.")
-        names = ["—"] + sorted(admins, key=normalize)
-        for d, c in enumerate(self.admin_combos):
-            c.clear()
-            c.addItems(names)
-            c.setCurrentText(self.cfg.admins_by_day.get(str(d), "—"))
+        self.duty_admins = self._duty_admins(admins)
+        self.use_admins.setEnabled(bool(self.duty_admins))
+        self.use_admins.setChecked(bool(self.duty_admins) and
+                                   (bool(self.cfg.admins) or bool(self.cfg.admins_by_day)
+                                    or not self.db.nobetmatik_config()))
+        self.admin_info.setText(
+            ("Müdür yardımcıları ve diğer idareciler (" + ", ".join(self.duty_admins) + ") "
+             "haftanın günlerine eşit sayıda paylaştırılır; her biri dersi olan günü alır, "
+             "bu yıl daha az nöbetçi idarecilik yapan önce seçer.") if self.duty_admins else
+            "İdareci belirlenmedi. 1 Ders Programı sayfasındaki İdareciler bölümünden "
+            "müdür yardımcılarını seçebilirsiniz.")
+
+    def _duty_admins(self, admins):
+        """Nöbetçi idareci olabilecekler: okul müdürü dışındaki idareciler (yalnızca müdür
+        varsa o)."""
+        from .names import NameMatcher
+        raw = self.db.get_setting("principal", "").strip()
+        principal = NameMatcher(sorted(admins)).match(raw) if raw else None
+        rest = sorted((a for a in admins if a != principal), key=normalize)
+        return rest or sorted(admins, key=normalize)
 
     def _check_all(self, on):
         for box in self.teach_checks:
@@ -452,8 +475,9 @@ class NobetmatikPage(QWidget):
         c.skip_free_days = self.skip_free.isChecked()
         c.prefer_light_days = self.light.isChecked()
         c.rotate = self.rotate.isChecked()
-        c.admins_by_day = {str(d): cb.currentText() for d, cb in enumerate(self.admin_combos)
-                           if cb.currentText() and cb.currentText() != "—"}
+        c.admins = list(self.duty_admins) if self.use_admins.isChecked() else []
+        if not c.admins:
+            c.admins_by_day = {}
         c.fixed = [r for k, r in self.rules if k == "fixed"]
         c.together = [r for k, r in self.rules if k == "together"]
         c.apart = [r for k, r in self.rules if k == "apart"]
@@ -472,11 +496,11 @@ class NobetmatikPage(QWidget):
             self.fit.setVisible(per_day * 5 - n >= 5)
             self.fit.setText("Yer sayısını öğretmen sayısına göre ayarla")
         else:
-            self.cap_info.setText(f"⚠ Yer yetmiyor: haftada <b>{per_day * 5}</b> nöbet yeri var ama "
-                                  f"<b>{n}</b> öğretmen nöbet tutacak. <b>{n - per_day * 5}</b> "
-                                  "öğretmene bu ay nöbet düşmez. Kişi sayılarını artırın ya da "
-                                  "aşağıdaki düğmeye basın.")
-            self.cap_info.setStyleSheet("color:#dc2626; font-weight:600")
+            self.cap_info.setText(f"ℹ Haftada <b>{per_day * 5}</b> nöbet yeri var, <b>{n}</b> "
+                                  "öğretmen nöbet tutacak. Kimse dışarıda kalmaz: fazladan "
+                                  "nöbetçiler yerlere sırayla eklenir. İsterseniz aşağıdaki "
+                                  "düğmeyle kişi sayılarını kendiniz de ayarlayabilirsiniz.")
+            self.cap_info.setStyleSheet("color:#b45309; font-weight:600")
             self.fit.setVisible(True)
             self.fit.setText("Herkese haftada 1 nöbet yetecek kadar yer ayarla")
         del weekly
@@ -509,8 +533,12 @@ class NobetmatikPage(QWidget):
             return
         kind = self.r_kind.currentData()
         if kind == "fixed":
-            rule = {"teacher": t, "day": self.r_day.currentIndex(),
+            rule = {"teacher": t, "day": self.r_day.currentData(),
                     "place": self.r_place.currentData()}
+            if rule["day"] is None and not rule["place"]:
+                U._info(self, "'Herhangi bir gün' seçtiyseniz bir nöbet yeri seçin "
+                              "(ya da bir gün seçin).")
+                return
         elif kind == "exempt":
             rule = [t, self.r_reason.text().strip()]
         elif kind in ("together", "apart"):
@@ -590,7 +618,7 @@ class NobetmatikPage(QWidget):
             d = day_of.get(t)
             self.edit_t.setItem(r, 2, U._item(f"{lesson_count(self.schedule, t, d)} ders"
                                               if d is not None else "—"))
-            why = "" if d is not None else self.result.reasons.get(t, "Yer yetmedi")
+            why = "" if d is not None else self.result.reasons.get(t, "Nöbet verilmedi")
             note = U._item(why)
             if why:
                 note.setBackground(theme.YELLOW)
@@ -666,7 +694,7 @@ class NobetmatikPage(QWidget):
         if self.result.unassigned:
             groups = {}
             for t in self.result.unassigned:
-                groups.setdefault(self.result.reasons.get(t, "Yer yetmedi"), []).append(t)
+                groups.setdefault(self.result.reasons.get(t, "Nöbet verilmedi"), []).append(t)
             for why, names in groups.items():
                 lines.append(f"<b>Nöbet verilmeyenler — {why}:</b> " + ", ".join(names))
         lines.append("Beğenmezseniz <b>Yeniden dağıt</b>'a basın ya da <b>İleri</b> ile bir "
@@ -707,16 +735,6 @@ class NobetmatikPage(QWidget):
 
 
 def print_duty(parent, win, month, entries, exempt=None, places=None):
-    from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-    doc = QTextDocument()
-    has_logo = os.path.exists(U.logo_path())
-    if has_logo:
-        doc.addResource(QTextDocument.ImageResource, QUrl("logo"), QImage(U.logo_path()))
-    doc.setHtml(export.duty_html(month, entries, win.school_info(), has_logo, exempt, places))
-    printer = QPrinter(QPrinter.HighResolution)
-    printer.setPageOrientation(QPageLayout.Portrait)
-    dlg = QPrintPreviewDialog(printer, parent)
-    dlg.setWindowTitle("Baskı önizleme — PDF için yazıcı olarak 'Microsoft Print to PDF' seçin")
-    dlg.resize(1100, 800)
-    dlg.paintRequested.connect(doc.print_)
-    dlg.exec()
+    doc = U.keep_together(lambda breaks: export.duty_html(
+        month, entries, win.school_info(), os.path.exists(U.logo_path()), exempt, places, breaks))
+    U.preview(parent, doc, f"nobet_cizelgesi_{month}.pdf")

@@ -212,6 +212,15 @@ class Database:
             "SELECT hour, absent_teacher, info, assigned, kind, note FROM assignments "
             "WHERE date=? ORDER BY hour, absent_teacher", (date,)).fetchall()
 
+    def saved_days(self, start, end):
+        """Onaylanmış görevlendirme günleri: [(tarih, {gelmeyen: durum}, [(saat, gelmeyen, bilgi,
+        giren, tür, not), ...]), ...] (yeniden eskiye)."""
+        dates = [r[0] for r in self.conn.execute(
+            "SELECT date FROM absences WHERE date >= ? AND date <= ? UNION "
+            "SELECT date FROM assignments WHERE date >= ? AND date <= ? ORDER BY 1 DESC",
+            (start, end, start, end))]
+        return [(d, self.absences(d), self.assignments(d)) for d in dates]
+
     def saved_dates(self, month):
         return [r[0] for r in self.conn.execute(
             "SELECT DISTINCT date FROM assignments WHERE substr(date,1,7)=? ORDER BY date",

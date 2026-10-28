@@ -6,8 +6,10 @@ Kurallar:
   - Dersi tam dolu günler yerine daha rahat günler tercih edilir (ayarlanabilir).
   - Nöbet yerleri her hafta bir sonrakine kayar: Bahçe -> Zemin -> 1. Kat -> 2. Kat ...
   - Sabitle (öğretmen -> gün, isteğe bağlı yer), Beraber, Ayrı, Gün kısıtı kuralları.
-  - Yer yetmezse bu eğitim yılında daha az nöbet tutmuş olanlara öncelik verilir.
+  - Yer yetmezse kimse dışarıda kalmaz: yerlere fazladan nöbetçi yazılır.
+  - Nöbetçi idareciler günlere adil ve otomatik dağıtılır.
 """
+import math
 import calendar
 import datetime as dt
 from dataclasses import asdict, dataclass, field
@@ -29,7 +31,8 @@ class Config:
     skip_free_days: bool = True
     prefer_light_days: bool = True
     rotate: bool = True
-    admins_by_day: dict = field(default_factory=dict)  # "0".."4" -> idareci
+    admins_by_day: dict = field(default_factory=dict)  # "0".."4" -> idareci (otomatik)
+    admins: list = field(default_factory=list)         # nöbetçi idareci olabilecekler
     fixed: list = field(default_factory=list)          # [{"teacher", "day", "place"}]
     together: list = field(default_factory=list)       # [[a, b]]
     apart: list = field(default_factory=list)          # [[a, b]]
@@ -128,9 +131,9 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
         return Result({d: [] for d in range(5)}, [], month_weeks(cfg.month),
                       ["Nöbet yeri girilmedi."], list(cfg.teachers))
     pool = [t for t in cfg.teachers if t not in cfg.exempt]
-    fixed_day = {f["teacher"]: int(f["day"]) for f in cfg.fixed if f.get("teacher") in pool}
-    fixed_place = {f["teacher"]: f.get("place") or "" for f in cfg.fixed
-                   if f.get("teacher") in pool and f.get("place")}
+    # Sabitlemede gün boş olabilir ("herhangi bir gün"): o zaman yalnızca yer sabitlenir.
+    fixed_day = {f["teacher"]: int(f["day"]) for f in cfg.fixed
+                 if f.get("teacher") in pool and f.get("day") not in (None, "", -1)}
 
     def allowed(t):
         # Kurallar her zaman önce gelir: sabitlenen gün / gün kısıtı, "dersi olmayan güne
@@ -147,25 +150,19 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
             return lesson_days
         return set(range(5))
 
-    # Kapasite yetmezse dışarıda kalanlar: bu yıl en çok nöbet tutanlar, eşitse haftalık ders
-    # yükü en ağır olanlar. Bir sonraki ay geçmiş sayısı az olduğu için önce onlara verilir.
-    total_slots = capacity * 5
+    # Yer yetmezse kimse dışarıda kalmaz: günlük nöbetçi sayısı artırılır, fazladan kişiler
+    # yerlere sırayla eklenir.
     weekly = {t: len(schedule.get(t, {})) for t in pool}
     pool.sort(key=lambda t: (history.get(t, 0), weekly[t], normalize(t)))
     unassigned = []
     reasons = {}
-    if len(pool) > total_slots:
-        keep = set(fixed_day) | {t for pair in cfg.together for t in pair}
-        extra = [t for t in pool if t not in keep][::-1]
-        while len(pool) > total_slots and extra:
-            t = extra.pop(0)
-            pool.remove(t)
-            unassigned.append(t)
-            reasons[t] = "Yer yetmedi (gelecek ay önceliği var)"
-        warnings.append(f"Nöbet yeri yetersiz (haftada {total_slots} yer): {len(unassigned)} "
-                        "öğretmene bu ay nöbet verilmedi — bu yıl en çok nöbet tutanlar, eşitse "
-                        "ders yükü en ağır olanlar. Gelecek ay önce onlara verilir. Yer sayısını "
-                        "artırabilir veya muaf/işaretsiz bırakabilirsiniz.")
+    need = math.ceil(len(pool) / 5)
+    expanded = need > capacity
+    if expanded:
+        warnings.append(f"Nöbet yerleri {len(pool)} öğretmene yetmediği için her gün {capacity} "
+                        f"yerine {need} nöbetçi yazıldı; fazladan kişiler yerlere sırayla "
+                        "eklendi. Herkes nöbet tutar.")
+        capacity = need
 
     groups = _Groups(pool)
     for a, b in cfg.together:
@@ -196,10 +193,10 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
         c += 3 * sum(covered.get(t, 0) / top_cov for t in units[r]) * demand.get(d, 0) / top_dem
         return c + 3 * load[d] / capacity   # günleri dengeli doldur
 
-    def place_unit(r):
+    def place_unit(r, overflow=False):
         size = len(units[r])
         options = [d for d in unit_allowed(r) - set(unit_days[r])
-                   if load[d] + size <= capacity
+                   if (overflow or load[d] + size <= capacity)
                    and not any((r, o) in apart and d in unit_days[o] for o in units)]
         if not options:
             return False
@@ -212,7 +209,8 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
     order = sorted(units, key=lambda r: (len(unit_allowed(r)), -len(units[r]),
                                           history.get(units[r][0], 0), normalize(units[r][0])))
     for r in order:
-        if not place_unit(r):
+        # Uygun günlerde yer kalmadıysa yine dışarıda bırakılmaz, en az dolu uygun güne eklenir.
+        if not place_unit(r) and not place_unit(r, overflow=True):
             names = ", ".join(units[r])
             why = ("uygun gün yok (kurallar veya ders günleri)" if not unit_allowed(r)
                    else "uygun günlerde yer kalmadı")
@@ -226,10 +224,12 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
             if unit_days[r]:
                 place_unit(r)
     free = sum(capacity - load[d] for d in range(5))
-    if free:
+    if free and not expanded:
         warnings.append(f"Haftada {free} nöbet yeri boş kaldı (öğretmen sayısı yetmedi). "
                         "'Gerekirse haftada 2 nöbet' seçeneğini açabilirsiniz.")
 
+    if cfg.admins:
+        cfg.admins_by_day = distribute_admins(cfg.admins, schedule, history)
     entries, weeks = build_entries(cfg, by_day)
     for t, why in cfg.exempt.items():
         if t in cfg.teachers:
@@ -238,6 +238,28 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
         if t not in unassigned and not any(t in by_day[d] for d in range(5)):
             unassigned.append(t)
     return Result(by_day, entries, weeks, warnings, unassigned, reasons)
+
+
+def distribute_admins(admins, schedule, history=None):
+    """Nöbetçi idarecileri haftanın günlerine adil dağıtır: {"0".."4": idareci}.
+
+    Herkese sırayla gün verilir (5 gün idareci sayısına eşit bölünür); bu yıl daha az nöbetçi
+    idarecilik yapan önce seçer. Her idareci okulda olduğu (dersi olan) günü tercih eder.
+    """
+    history = history or {}
+    admins = sorted(admins, key=lambda a: (history.get(a, 0), normalize(a)))
+    if not admins:
+        return {}
+    count = {a: 0 for a in admins}
+    out = {}
+    # Gün sırası: en az idarecinin dersi olan gün önce dağıtılır (seçenek az olan önce)
+    days = sorted(range(5), key=lambda d: sum(1 for a in admins if lesson_count(schedule, a, d)))
+    for d in days:
+        best = min(admins, key=lambda a: (count[a], 0 if lesson_count(schedule, a, d) else 1,
+                                          history.get(a, 0), normalize(a)))
+        out[str(d)] = best
+        count[best] += 1
+    return out
 
 
 def build_entries(cfg, by_day):
@@ -308,8 +330,9 @@ def move_teacher(cfg, result, schedule, teacher, new_day):
 
 def rule_text(kind, rule):
     if kind == "fixed":
-        return f"{rule['teacher']} → {DAYS[int(rule['day'])]}" + \
-            (f", {rule['place']}" if rule.get("place") else "")
+        day = rule.get("day")
+        when = "herhangi bir gün" if day in (None, "", -1) else DAYS[int(day)]
+        return f"{rule['teacher']} → {when}" + (f", {rule['place']}" if rule.get("place") else "")
     if kind == "together":
         return f"{rule[0]} ile {rule[1]} aynı gün"
     if kind == "apart":
