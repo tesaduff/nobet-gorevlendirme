@@ -5,7 +5,8 @@ import sys
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractScrollArea, QAbstractSpinBox, QComboBox, QFrame,
-                               QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QScrollArea,
+                               QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow,
+                               QPushButton, QScrollArea,
                                QStackedWidget, QVBoxLayout, QWidget)
 
 # Ayarlar'dan seçilebilen vurgu renkleri: ad -> (ana renk, üzerine gelince, açık ton, menü zemini)
@@ -258,11 +259,50 @@ DENSITIES = {"Sıkı": 30, "Normal": 36, "Rahat": 44}
 ROW_HEIGHT = 36
 
 
+# Stil sayfası uygulama geneline değil, "kök" denetimlere (sol menü, her sayfa, pencereler)
+# ayrı ayrı verilir. Tema değişince yalnızca ekranda görünen kökler hemen yenilenir; gizli
+# sayfalar ilk gösterildiklerinde yenilenir. Böylece tema değişimi anında olur.
+CURRENT_STYLE = ""
+STYLE_VERSION = 0
+_roots = []
+
+
+def style_root(widget):
+    """Denetimi temalı kök olarak kaydeder ve hemen boyar."""
+    widget.setProperty("themeRoot", True)
+    _roots.append(widget)
+    _restyle(widget)
+    return widget
+
+
+def _restyle(widget):
+    if widget.property("themeVersion") != STYLE_VERSION:
+        widget.setProperty("themeVersion", STYLE_VERSION)
+        widget.setStyleSheet(CURRENT_STYLE)
+
+
+def _refresh_visible():
+    import shiboken6
+    for w in list(_roots):
+        if not shiboken6.isValid(w):
+            _roots.remove(w)
+        elif w.isVisible():
+            _restyle(w)
+
+
 class WheelGuard(QObject):
     """Fare tekerleği, tıklanmamış açılır kutu / sayı kutusunun değerini değiştirmesin;
-    bunun yerine sayfayı kaydırsın."""
+    bunun yerine sayfayı kaydırsın. Ayrıca gösterilen sayfa ve pencerelere güncel temayı
+    uygular."""
 
     def eventFilter(self, obj, event):
+        if event.type() == QEvent.Show and isinstance(obj, QWidget):
+            if obj.property("themeRoot"):
+                _restyle(obj)
+            elif obj.isWindow() and not isinstance(obj, QMainWindow) and \
+                    obj.windowType() != Qt.Popup:
+                _restyle(obj)        # iletiler, pencereler, ipuçları
+            return False
         if event.type() == QEvent.Wheel and isinstance(obj, (QComboBox, QAbstractSpinBox)) \
                 and not obj.hasFocus():
             w = obj.parentWidget()
@@ -292,9 +332,12 @@ def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal",
     if _guard is None:
         app.setStyle("Fusion")
         app.setWindowIcon(app_icon())
+    global CURRENT_STYLE, STYLE_VERSION
     style = build_style(accent, dark, radius, background)
-    if app.styleSheet() != style:
-        app.setStyleSheet(style)
+    if style != CURRENT_STYLE:
+        CURRENT_STYLE = style
+        STYLE_VERSION += 1
+        _refresh_visible()
     if _guard is None:
         _guard = WheelGuard(app)
         app.installEventFilter(_guard)
@@ -385,6 +428,7 @@ class NavPages(QWidget):
         super().__init__()
         side = QFrame()
         side.setObjectName("sidebar")
+        style_root(side)
         side.setFixedWidth(210)
         sv = QVBoxLayout(side)
         sv.setContentsMargins(0, 22, 0, 16)
@@ -454,6 +498,7 @@ class NavPages(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(page)
+        style_root(scroll)
         self._widgets = getattr(self, "_widgets", []) + [widget]
         self.stack.addWidget(scroll)
         item = QListWidgetItem(label)

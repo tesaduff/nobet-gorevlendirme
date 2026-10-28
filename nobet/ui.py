@@ -631,7 +631,7 @@ class SchoolTab(QWidget):
         self._show_logo(logo_path() if os.path.exists(logo_path()) else None)
         self.admins_note.setText(
             "Okul müdürü ve müdür yardımcıları, ders programı yüklendikten sonra "
-            "<b>1 Ders Programı</b> sayfasının altındaki <b>İdareciler</b> bölümünden listeden "
+            "<b>Ders Programı</b> sayfasının altındaki <b>İdareciler</b> bölümünden listeden "
             "seçilir. Çıktılardaki imza yerlerine bu seçim yazılır.")
 
     def _show_logo(self, path):
@@ -975,7 +975,7 @@ class DailyTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(10)
-        v.addWidget(page_header("3  Görevlendirme"))
+        v.addWidget(page_header("📝  Görevlendirme"))
         v.addWidget(self._build_setup())
         v.addWidget(self.stepbar)
         v.addWidget(self.steps, 1)
@@ -1067,7 +1067,7 @@ class DailyTab(QWidget):
         elif month != date[:7]:
             msgs.append(f"<span style='color:#dc2626'><b>{export.month_tr(date[:7])} nöbet "
                         f"çizelgesi yüklenmedi!</b> Şimdilik {export.month_tr(month)} çizelgesi "
-                        "kullanılıyor — <b>2 Nöbet Çizelgesi</b> bölümünden bu ayınkini "
+                        "kullanılıyor — <b>Nöbet Çizelgesi</b> bölümünden bu ayınkini "
                         "yükleyin.</span>")
         # İdareciler listelenmez: onlara zaten boş ders görevlendirmesi yapılmaz
         teaching = sorted((t for t in teachers_with_lessons(self.schedule, wd)
@@ -1493,7 +1493,7 @@ class ScheduleTab(QWidget):
         self.steps.addWidget(p2)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(page_header("1  Ders Programı",
+        v.addWidget(page_header("📚  Ders Programı",
                                 "Okulun ders programını PDF veya Excel olarak yükleyin; okunanları "
                                 "kontrol edip gerekirse düzeltin."))
         v.addWidget(self.steps, 1)
@@ -1739,7 +1739,7 @@ class DutyTab(QWidget):
         self.steps.addWidget(p2)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(page_header("2  Nöbet Çizelgesi",
+        v.addWidget(page_header("🗓  Nöbet Çizelgesi",
                                 "Ders programındaki öğretmenlerden her ay adil bir nöbet çizelgesi "
                                 "oluşturun; görevlendirme bu çizelgeyi kullanır."))
         v.addWidget(self.steps, 1)
@@ -1747,7 +1747,7 @@ class DutyTab(QWidget):
 
     def open_nobetmatik(self, month=None):
         if not self.db.schedule_versions():
-            _info(self, "Önce 1. adımda ders programını yükleyin; otomatik dağıtım öğretmenleri ve "
+            _info(self, "Önce Ders Programı sayfasından ders programını yükleyin; otomatik dağıtım öğretmenleri ve "
                         "derslerini oradan alır.")
             return
         self.win.tabs.setCurrentWidget(self)
@@ -1890,7 +1890,7 @@ class DutyTab(QWidget):
         """Elle giriş: seçili ayın çizelgesini (yoksa boş bir çizelgeyi) düzenler."""
         teachers = self._teachers()
         if not teachers:
-            _info(self, "Önce 1. adımda ders programını yükleyin.")
+            _info(self, "Önce Ders Programı sayfasından ders programını yükleyin.")
             return
         m = self.month() or dt.date.today().strftime("%Y-%m")
         entries = [DutyEntry(wd, t, p, d) for wd, d, t, p in self.db.duty_rows(m)]
@@ -2489,7 +2489,7 @@ class SettingsTab(QWidget):
         self.win.duty.refresh()
         self.win.changed()
         self.win.go_first_step()
-        _info(self, "Tüm veriler silindi. 1. adımdan, ders programını yükleyerek başlayın.")
+        _info(self, "Tüm veriler silindi. Ders Programı sayfasından, ders programını yükleyerek başlayın.")
 
     def _paint_swatches(self):
         for name, (b, color) in self.swatches.items():
@@ -2627,15 +2627,16 @@ class MainWindow(QMainWindow):
         self.settings = SettingsTab(self)
         # Sıra: önce ders programı, sonra nöbet çizelgesi, sonra görevlendirme
         self.tabs.addTab(self.school_tab, "🏫   Okul Bilgileri")
-        self.tabs.addTab(self.sched, "1   Ders Programı")
-        self.tabs.addTab(self.duty, "2   Nöbet Çizelgesi")
-        self.tabs.addTab(self.daily, "3   Görevlendirme")
+        self.tabs.addTab(self.sched, "📚   Ders Programı")
+        self.tabs.addTab(self.duty, "🗓   Nöbet Çizelgesi")
+        self.tabs.addTab(self.daily, "📝   Görevlendirme")
         self.tabs.addTab(self.records, "📋   Kayıtlar")
         self.tabs.addTab(self.report, "📊   Aylık Rapor")
         self.tabs.addTab(self.settings, "⚙   Ayarlar")
         self.tabs.currentChanged.connect(self._tab_changed)
         self.tabs.exit_btn.clicked.connect(self.quit)
         self.setCentralWidget(self.tabs)
+        theme.style_root(self.statusBar())
         self.update_brand()
         self.go_first_step()
         self.statusBar().showMessage("Hazır.")
@@ -2652,7 +2653,7 @@ class MainWindow(QMainWindow):
         self.update_brand()
         self.write_excel()
         if first and not self.db.schedule_versions():
-            _info(self, "✅ Okul bilgileri kaydedildi.\n\nSıradaki adım: 1 — Ders programı. "
+            _info(self, "✅ Okul bilgileri kaydedildi.\n\nSıradaki adım: Ders Programı. "
                         "Okulunuzun ders programını PDF veya Excel olarak yükleyin.",
                   "Sonraki adım")
             self.tabs.setCurrentWidget(self.sched)
@@ -2687,7 +2688,7 @@ class MainWindow(QMainWindow):
         """Bir adım bitince kullanıcıyı sıradaki adıma götürür."""
         self.ask_admins()
         if not self.db.duty_months():
-            _info(self, f"✅ {done}\n\nSıradaki adım: 2 — Nöbet çizelgesi.\n\n"
+            _info(self, f"✅ {done}\n\nSıradaki adım: Nöbet Çizelgesi.\n\n"
                         "• otomatik oluşturabilir,\n• hazır çizelgenizi PDF/Excel olarak "
                         "yükleyebilir,\n• ya da elle girebilirsiniz.", "Sonraki adım")
             self.tabs.setCurrentWidget(self.duty)

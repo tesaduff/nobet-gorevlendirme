@@ -423,7 +423,7 @@ class NobetmatikPage(QWidget):
             ("Müdür yardımcıları ve diğer idareciler (" + ", ".join(self.duty_admins) + ") "
              "haftanın günlerine eşit sayıda paylaştırılır; her biri dersi olan günü alır, "
              "bu yıl daha az nöbetçi idarecilik yapan önce seçer.") if self.duty_admins else
-            "İdareci belirlenmedi. 1 Ders Programı sayfasındaki İdareciler bölümünden "
+            "İdareci belirlenmedi. Ders Programı sayfasındaki İdareciler bölümünden "
             "müdür yardımcılarını seçebilirsiniz.")
 
     def _duty_admins(self, admins):

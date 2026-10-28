@@ -1,4 +1,9 @@
-Sürüm 2.1.0
+Sürüm 2.1.1
+
+- Tema rengi, açık/koyu, köşe ve arka plan seçimleri artık anında uygulanır (yaklaşık 10 kat hızlı): yalnızca ekrandaki sayfa hemen boyanır, diğer sayfalar açılınca yenilenir
+- Sol menüde numaralar yerine simgeler: 🏫 Okul Bilgileri, 📚 Ders Programı, 🗓 Nöbet Çizelgesi, 📝 Görevlendirme, 📋 Kayıtlar, 📊 Aylık Rapor, ⚙ Ayarlar
+
+Sürüm 2.1.0'daki yenilikler
 
 Görevlendirme:
 - Yeni "📋 Kayıtlar" sayfası: onaylanan her günün görevlendirmesi gün gün listelenir; açılıp değiştirilebilir, yazdırılabilir, silinebilir. Silinen gün istatistiklerden de düşülür (onaylayınca eklenir, silince çıkar)
