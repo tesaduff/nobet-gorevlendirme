@@ -1549,90 +1549,100 @@ class DutyTab(QWidget):
 
 
 class ReportTab(QWidget):
-    """Ay ve eğitim yılı bazında kimin kaç derse girdiğini açıkça gösterir."""
+    """Sade rapor: kim bu ay ve bu eğitim yılında kaç derse girdi."""
 
     def __init__(self, win):
         super().__init__()
         self.win, self.db = win, win.db
         self.month = MonthPicker()
         self.month.changed.connect(self.refresh)
-        self.only_duty = QCheckBox("Yalnızca o ay nöbetçi olanlar")
-        self.only_duty.setChecked(True)
-        self.only_duty.toggled.connect(self.refresh)
         xlsx = QPushButton("Excel'e aktar")
         xlsx.clicked.connect(self.to_excel)
         top = QHBoxLayout()
         top.addWidget(QLabel("<b>Ay:</b>"))
         top.addWidget(self.month)
-        top.addSpacing(12)
-        top.addWidget(self.only_duty)
         top.addStretch()
         top.addWidget(xlsx)
-        self.cards = [theme.StatCard("bu ay doldurulan ders", theme.ACCENT),
-                      theme.StatCard("eğitim yılı toplamı", "#059669"),
-                      theme.StatCard("yılda en çok giren", "#d97706"),
-                      theme.StatCard("sıradaki öncelikli (en az giren)", "#2563eb")]
-        ch = QHBoxLayout()
-        for c in self.cards:
-            ch.addWidget(c)
-        self.table = QTableWidget(0, len(export.REPORT_HEADERS))
-        self.table.setHorizontalHeaderLabels(export.REPORT_HEADERS)
-        _stretch(self.table, 0)
-        self.table.horizontalHeader().setMinimumSectionSize(70)
+        self.summary = QLabel()
+        self.summary.setWordWrap(True)
+        self.summary.setObjectName("card")
+        self.summary.setStyleSheet("padding:12px; font-size:11pt")
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Öğretmen", "Bu ay", "Bu yıl", ""])
+        h = self.table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.Fixed)
+        h.setSectionResizeMode(2, QHeaderView.Fixed)
+        h.setSectionResizeMode(3, QHeaderView.Stretch)
+        self.table.setColumnWidth(1, 80)
+        self.table.setColumnWidth(2, 80)
         self.table.verticalHeader().hide()
-        self.table.setSortingEnabled(True)
+        self.table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
+        self.table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.table.setFocusPolicy(Qt.NoFocus)
+        self.table.setShowGrid(False)
         self.table.setMinimumHeight(200)
-        explain = QLabel("<b>Nasıl okunur?</b> <i>Bu ay derse girdi</i>: seçilen ayda gelmeyen "
-                         "öğretmenin yerine kaç derse girdiği. <i>Eğitim yılı toplamı</i>: Eylül'den "
-                         "bu yana toplam — program adaleti bu sayıya göre sağlar, en az girene "
-                         "öncelik verir. Ay değişince sayılar sıfırlanmaz.")
-        explain.setWordWrap(True)
-        explain.setObjectName("subtitle")
+        note = QLabel("<b>Bu ay</b>: seçilen ayda gelmeyen öğretmenlerin yerine kaç derse girdi. "
+                      "<b>Bu yıl</b>: Eylül'den bu yana toplam. Program, yıl toplamı en az olan "
+                      "nöbetçiye öncelik verir; ay değişince sayılar sıfırlanmaz.")
+        note.setWordWrap(True)
+        note.setObjectName("subtitle")
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(page_header("Aylık Rapor"))
         v.addLayout(top)
-        v.addLayout(ch)
-        v.addWidget(explain)
+        v.addWidget(self.summary)
         v.addWidget(self.table, 1)
+        v.addWidget(note)
         self.rows = []
 
     def key(self):
         return self.month.key()
 
     def refresh(self):
+        from PySide6.QtWidgets import QProgressBar
         m = self.key()
         last = max(self.db.saved_dates(m) or [m + "-28"])
         year = self.db.year_counts(last)
         rows = export.report_rows(self.db.counts(m), year, self.db.duty_days_in_month(m))
-        if self.only_duty.isChecked():
-            rows = [r for r in rows if r[1] or r[2]]
+        rows = [r for r in rows if r[1] or r[2] or r[3]]
+        rows.sort(key=lambda r: (-r[3], -r[2], normalize(r[0])))
         self.rows = rows
-        self.table.setSortingEnabled(False)
+        top = max((r[3] for r in rows), default=0) or 1
         self.table.setRowCount(len(rows))
-        for r, row in enumerate(rows):
-            for c, val in enumerate(row):
-                it = QTableWidgetItem()
-                it.setData(Qt.DisplayRole, val)
-                it.setFlags(it.flags() & ~Qt.ItemIsEditable)
-                if c == 6:
-                    if val.startswith("Az"):
-                        it.setBackground(GREEN)
-                    elif val.startswith("Çok"):
-                        it.setBackground(YELLOW)
-                self.table.setItem(r, c, it)
-        self.table.setSortingEnabled(True)
-        duty_rows = [r for r in rows if r[1]]
-        self.cards[0].set(sum(r[2] for r in rows))
-        self.cards[1].set(sum(r[3] for r in rows))
-        if duty_rows and any(r[3] for r in duty_rows):
-            top = max(duty_rows, key=lambda r: r[3])
-            low = min(duty_rows, key=lambda r: r[3])
-            self.cards[2].set(f"{top[0].split()[0]} ({top[3]})")
-            self.cards[3].set(f"{low[0].split()[0]} ({low[3]})")
-        else:
-            self.cards[2].set("—")
-            self.cards[3].set("—")
+        for i, r in enumerate(rows):
+            self.table.setItem(i, 0, _item(r[0]))
+            for c, val in ((1, r[2]), (2, r[3])):
+                it = _item(val)
+                it.setTextAlignment(Qt.AlignCenter)
+                if c == 2:
+                    f = it.font()
+                    f.setBold(True)
+                    it.setFont(f)
+                self.table.setItem(i, c, it)
+            bar = QProgressBar()
+            bar.setRange(0, top)
+            bar.setValue(r[3])
+            bar.setTextVisible(False)
+            bar.setFixedHeight(12)
+            bar.setStyleSheet(f"QProgressBar {{ border:none; background:transparent; }}"
+                              f"QProgressBar::chunk {{ background:{theme.ACCENT}; border-radius:6px; }}")
+            holder = QWidget()
+            hl = QVBoxLayout(holder)
+            hl.setContentsMargins(8, 0, 8, 0)
+            hl.addWidget(bar)
+            self.table.setCellWidget(i, 3, holder)
+        month_total = sum(r[2] for r in rows)
+        duty = [r for r in rows if r[1]]
+        if not rows:
+            self.summary.setText(f"{export.month_tr(m)} için henüz kayıt yok.")
+            return
+        low = min(r[3] for r in duty) if duty else 0
+        nxt = [r[0] for r in duty if r[3] == low][:3]
+        self.summary.setText(
+            f"<b>{export.month_tr(m)}</b>: gelmeyen öğretmenlerin <b>{month_total}</b> dersi "
+            f"dolduruldu." + (f"<br>Sıradaki öncelik (bu yıl en az giren nöbetçiler): "
+                              f"<b>{', '.join(nxt)}</b>" if nxt else ""))
 
     def to_excel(self):
         path, _ = QFileDialog.getSaveFileName(self, "Excel olarak kaydet",

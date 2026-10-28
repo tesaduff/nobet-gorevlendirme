@@ -11,87 +11,26 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComb
 from . import export, theme
 from . import ui as U
 from .names import DAYS, normalize
-from .nobetmatik import ADMIN_PLACE, Config, distribute, lesson_count, rule_text
+from .nobetmatik import ADMIN_PLACE, Config, distribute, lesson_count, move_teacher, rule_text
 from .theme import page_header, variant
 
-STEPS = ["Ay ve öğretmenler", "Nöbet yerleri", "Seçenekler", "Kurallar", "Dağıt ve kaydet"]
-RULE_KINDS = {"fixed": "Sabitle", "together": "Beraber", "apart": "Ayrı", "allowed": "Gün kısıtı"}
+STEPS = ["Ay ve öğretmenler", "Nöbet yerleri", "Seçenekler", "Kurallar", "Dağıt",
+         "Düzenle ve kaydet"]
+RULE_KINDS = {"fixed": "Sabitle", "exempt": "Muaf", "together": "Beraber", "apart": "Ayrı",
+              "allowed": "Gün kısıtı"}
 
 
-class RuleDialog(QDialog):
-    def __init__(self, parent, kind, teachers, places):
-        super().__init__(parent)
-        self.kind = kind
-        self.setWindowTitle(f"Kural ekle — {RULE_KINDS[kind]}")
-        self.resize(460, 260)
-        form = QFormLayout()
-        self.a = self._teacher_combo(teachers)
-        explain = {
-            "fixed": "Öğretmen her hafta seçilen gün (isterseniz seçilen yerde) nöbet tutar.",
-            "together": "İki öğretmen aynı gün nöbet tutar.",
-            "apart": "İki öğretmen aynı gün nöbet tutmaz.",
-            "allowed": "Öğretmen yalnızca işaretlenen günlerde nöbet tutabilir.",
-        }[kind]
-        lab = QLabel(explain)
-        lab.setWordWrap(True)
-        form.addRow(lab)
-        form.addRow("Öğretmen:", self.a)
-        if kind == "fixed":
-            self.day = QComboBox()
-            self.day.addItems(DAYS)
-            self.place = QComboBox()
-            self.place.addItem("Fark etmez (yerler dönsün)", "")
-            for p in places:
-                self.place.addItem(p, p)
-            form.addRow("Gün:", self.day)
-            form.addRow("Nöbet yeri:", self.place)
-        elif kind in ("together", "apart"):
-            self.b = self._teacher_combo(teachers)
-            form.addRow("İkinci öğretmen:", self.b)
-        else:
-            self.days = [QCheckBox(d) for d in DAYS]
-            h = QHBoxLayout()
-            for c in self.days:
-                h.addWidget(c)
-            form.addRow("Günler:", h)
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.button(QDialogButtonBox.Ok).setText("Ekle")
-        variant(bb.button(QDialogButtonBox.Ok), "primary")
-        bb.button(QDialogButtonBox.Cancel).setText("Vazgeç")
-        bb.accepted.connect(self._ok)
-        bb.rejected.connect(self.reject)
-        v = QVBoxLayout(self)
-        v.addLayout(form)
-        v.addStretch()
-        v.addWidget(bb)
-
-    @staticmethod
-    def _teacher_combo(teachers):
-        c = QComboBox()
-        c.setEditable(True)
-        c.addItems(teachers)
-        c.setInsertPolicy(QComboBox.NoInsert)
-        comp = c.completer()
-        comp.setCaseSensitivity(Qt.CaseInsensitive)
-        comp.setFilterMode(Qt.MatchContains)
-        return c
-
-    def _ok(self):
-        if self.kind in ("together", "apart") and self.a.currentText() == self.b.currentText():
-            U._info(self, "İki farklı öğretmen seçin.")
-            return
-        if self.kind == "allowed" and not any(c.isChecked() for c in self.days):
-            U._info(self, "En az bir gün işaretleyin.")
-            return
-        self.accept()
-
-    def rule(self):
-        t = self.a.currentText()
-        if self.kind == "fixed":
-            return {"teacher": t, "day": self.day.currentIndex(), "place": self.place.currentData()}
-        if self.kind in ("together", "apart"):
-            return [t, self.b.currentText()]
-        return [t, [i for i, c in enumerate(self.days) if c.isChecked()]]
+def teacher_combo(teachers=()):
+    """Yazarak aranabilen öğretmen seçimi."""
+    c = QComboBox()
+    c.setEditable(True)
+    c.setInsertPolicy(QComboBox.NoInsert)
+    c.addItems(list(teachers))
+    c.setMinimumHeight(36)
+    comp = c.completer()
+    comp.setCaseSensitivity(Qt.CaseInsensitive)
+    comp.setFilterMode(Qt.MatchContains)
+    return c
 
 
 class NobetmatikPage(QWidget):
@@ -107,21 +46,21 @@ class NobetmatikPage(QWidget):
         self.stepbar = theme.StepBar(STEPS)
         self.stack = QStackedWidget()
         for build in (self._page_teachers, self._page_places, self._page_options,
-                      self._page_rules, self._page_result):
+                      self._page_rules, self._page_result, self._page_edit):
             self.stack.addWidget(build())
 
         self.back = QPushButton("←  Geri")
-        self.back.setMinimumHeight(44)
+        self.back.setMinimumHeight(40)
         self.back.clicked.connect(lambda: self.go(self.stack.currentIndex() - 1))
         self.next = variant(QPushButton("İleri  →"), "primary")
-        self.next.setMinimumHeight(44)
+        self.next.setMinimumHeight(40)
         self.next.setStyleSheet("font-size:12pt")
         self.next.clicked.connect(lambda: self.go(self.stack.currentIndex() + 1))
         cancel = QPushButton("Vazgeç")
-        cancel.setMinimumHeight(44)
+        cancel.setMinimumHeight(40)
         cancel.clicked.connect(self.on_cancel)
         self.save_btn = variant(QPushButton("✅  Kaydet ve kullan"), "primary")
-        self.save_btn.setMinimumHeight(44)
+        self.save_btn.setMinimumHeight(40)
         self.save_btn.clicked.connect(self.save)
         foot = QHBoxLayout()
         foot.addWidget(cancel)
@@ -130,24 +69,24 @@ class NobetmatikPage(QWidget):
         foot.addWidget(self.next)
         foot.addWidget(self.save_btn)
 
+        # Gezinme düğmeleri üstte: küçük ekranlarda da her zaman görünür
+        self.stack.setMinimumHeight(220)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(self.stepbar)
-        v.addWidget(self.stack, 1)
         v.addLayout(foot)
+        v.addWidget(self.stack, 1)
 
     # ------------------------------------------------------------ sayfalar
     def _page_teachers(self):
         self.month = U.MonthPicker()
         self.month.changed.connect(self._month_changed)
-        self.teach = QTableWidget(0, 5)
-        self.teach.setHorizontalHeaderLabels(["Nöbet tutar", "Öğretmen", "Ders günleri", "Muaf",
-                                              "Muafiyet mazereti"])
-        U._stretch(self.teach, 1)
-        self.teach.horizontalHeader().setSectionResizeMode(4, U.QHeaderView.Stretch)
+        self.teach = QTableWidget(0, 3)
+        self.teach.setHorizontalHeaderLabels(["Nöbet tutar", "Öğretmen", "Ders günleri (ders sayısı)"])
+        U._stretch(self.teach, 1, 2)
         self.teach.verticalHeader().hide()
         self.teach.setSelectionMode(QAbstractItemView.NoSelection)
-        self.teach.setMinimumHeight(180)
+        self.teach.setMinimumHeight(140)
         all_b = QPushButton("Tümünü seç")
         all_b.clicked.connect(lambda: self._check_all(True))
         none_b = QPushButton("Hiçbirini seçme")
@@ -174,7 +113,7 @@ class NobetmatikPage(QWidget):
         self.places.setHorizontalHeaderLabels(["Nöbet yeri", "Her gün kaç nöbetçi?"])
         U._stretch(self.places, 0)
         self.places.verticalHeader().hide()
-        self.places.setMinimumHeight(180)
+        self.places.setMinimumHeight(120)
         add = QPushButton("＋  Yer ekle")
         add.clicked.connect(lambda: self._add_place("", 1))
         rem = variant(QPushButton("Seçili yeri sil"), "danger")
@@ -225,42 +164,127 @@ class NobetmatikPage(QWidget):
             c.setMinimumWidth(260)
             self.admin_combos.append(c)
             l3.addRow(d + ":", c)
-        p = QWidget()
-        v = QVBoxLayout(p)
-        v.setContentsMargins(0, 0, 0, 0)
+        inner = QWidget()
+        v = QVBoxLayout(inner)
+        v.setContentsMargins(0, 0, 4, 0)
         for g in (g1, g2, g3):
             v.addWidget(g)
         v.addStretch()
+        from PySide6.QtWidgets import QFrame, QScrollArea
+        p = QScrollArea()
+        p.setWidgetResizable(True)
+        p.setFrameShape(QFrame.NoFrame)
+        p.setWidget(inner)
         return p
 
     def _page_rules(self):
+        """Önce öğretmen, sonra kural türü; türe göre ilgili alan açılır."""
+        self.r_teacher = teacher_combo()
+        self.r_teacher.lineEdit().setPlaceholderText("Öğretmen adını yazın veya seçin…")
+        self.r_kind = QComboBox()
+        self.r_kind.setMinimumHeight(36)
+        for k, label in RULE_KINDS.items():
+            self.r_kind.addItem(label, k)
+        self.r_fields = QStackedWidget()
+        # Sabitle: gün + yer
+        f_fixed = QWidget()
+        ff = QHBoxLayout(f_fixed)
+        ff.setContentsMargins(0, 0, 0, 0)
+        self.r_day = QComboBox()
+        self.r_day.addItems(DAYS)
+        self.r_place = QComboBox()
+        self.r_place.setMinimumWidth(200)
+        ff.addWidget(QLabel("Hangi gün:"))
+        ff.addWidget(self.r_day)
+        ff.addSpacing(12)
+        ff.addWidget(QLabel("Hangi yer:"))
+        ff.addWidget(self.r_place)
+        ff.addStretch()
+        # Muaf: mazeret
+        f_ex = QWidget()
+        fe = QHBoxLayout(f_ex)
+        fe.setContentsMargins(0, 0, 0, 0)
+        self.r_reason = QLineEdit()
+        self.r_reason.setPlaceholderText("Mazereti yazın (ör. sağlık raporu, hamilelik, görevlendirme)")
+        self.r_reason.setMinimumHeight(36)
+        fe.addWidget(QLabel("Mazeret:"))
+        fe.addWidget(self.r_reason, 1)
+        # Beraber / Ayrı: kiminle
+        f_with = QWidget()
+        fw = QHBoxLayout(f_with)
+        fw.setContentsMargins(0, 0, 0, 0)
+        self.r_other = teacher_combo()
+        self.r_with_label = QLabel("Kiminle:")
+        fw.addWidget(self.r_with_label)
+        fw.addWidget(self.r_other, 1)
+        # Gün kısıtı: günler
+        f_days = QWidget()
+        fd = QHBoxLayout(f_days)
+        fd.setContentsMargins(0, 0, 0, 0)
+        fd.addWidget(QLabel("Yalnızca şu günler:"))
+        self.r_days = [QCheckBox(d) for d in DAYS]
+        for c in self.r_days:
+            fd.addWidget(c)
+        fd.addStretch()
+        self._field_of = {"fixed": 0, "exempt": 1, "together": 2, "apart": 2, "allowed": 3}
+        for w in (f_fixed, f_ex, f_with, f_days):
+            self.r_fields.addWidget(w)
+        self.r_kind.currentIndexChanged.connect(self._kind_changed)
+        add = variant(QPushButton("＋  Kuralı ekle"), "primary")
+        add.setMinimumHeight(40)
+        add.clicked.connect(self._add_rule)
+
+        builder = QGroupBox("Yeni kural")
+        bl = QFormLayout(builder)
+        bl.addRow("1. Öğretmen:", self.r_teacher)
+        bl.addRow("2. Kural:", self.r_kind)
+        bl.addRow("3. Ayrıntı:", self.r_fields)
+        bl.addRow("", add)
+
         self.rules_t = QTableWidget(0, 2)
         self.rules_t.setHorizontalHeaderLabels(["Kural", "Açıklama"])
         U._stretch(self.rules_t, 1)
         self.rules_t.verticalHeader().hide()
         self.rules_t.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.rules_t.setMinimumHeight(160)
-        h = QHBoxLayout()
-        for kind, label in RULE_KINDS.items():
-            b = QPushButton("＋  " + label)
-            b.clicked.connect(lambda _c=False, k=kind: self._add_rule(k))
-            h.addWidget(b)
+        self.rules_t.setMinimumHeight(80)
         rem = variant(QPushButton("Seçili kuralı sil"), "danger")
         rem.clicked.connect(self._remove_rule)
-        h.addStretch()
-        h.addWidget(rem)
-        hint = QLabel("İsterseniz kural ekleyin; kural yoksa doğrudan <b>İleri</b>'ye basın.<br>"
-                      "<b>Sabitle</b>: öğretmen hep aynı gün (ve yer) · <b>Beraber</b>: iki öğretmen "
-                      "aynı gün · <b>Ayrı</b>: aynı gün olmasın · <b>Gün kısıtı</b>: yalnızca "
-                      "seçilen günler")
-        hint.setWordWrap(True)
+        lst = QGroupBox("Eklenen kurallar")
+        ll = QVBoxLayout(lst)
+        ll.addWidget(self.rules_t, 1)
+        ll.addWidget(rem, 0, Qt.AlignRight)
+        hint = QLabel("Kural şart değil; kural yoksa doğrudan <b>İleri</b>'ye basın.")
+        hint.setObjectName("subtitle")
         p = QWidget()
         v = QVBoxLayout(p)
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(hint)
-        v.addLayout(h)
-        v.addWidget(self.rules_t, 1)
+        v.addWidget(builder)
+        v.addWidget(lst, 1)
+        self._kind_changed()
         return p
+
+    def _kind_changed(self):
+        kind = self.r_kind.currentData()
+        self.r_fields.setCurrentIndex(self._field_of[kind])
+        self.r_with_label.setText("Kiminle aynı gün:" if kind == "together"
+                                  else "Kiminle aynı gün olmasın:")
+
+    def _rule_teachers(self):
+        c = self._collect()
+        return sorted(c.teachers, key=normalize), [p for p, _n in c.places]
+
+    def _prepare_rules_page(self):
+        teachers, places = self._rule_teachers()
+        for combo in (self.r_teacher, self.r_other):
+            cur = combo.currentText()
+            combo.clear()
+            combo.addItems(teachers)
+            combo.setCurrentText(cur if cur in teachers else "")
+        self.r_place.clear()
+        self.r_place.addItem("Fark etmez (yerler dönsün)", "")
+        for p in places:
+            self.r_place.addItem(p, p)
 
     def _page_result(self):
         self.week = QComboBox()
@@ -280,7 +304,7 @@ class NobetmatikPage(QWidget):
         self.grid.verticalHeader().hide()
         self.grid.setSelectionMode(QAbstractItemView.NoSelection)
         self.grid.setWordWrap(True)
-        self.grid.setMinimumHeight(180)
+        self.grid.setMinimumHeight(140)
         self.res_info = QLabel()
         self.res_info.setWordWrap(True)
         p = QWidget()
@@ -296,7 +320,8 @@ class NobetmatikPage(QWidget):
         saved = Config.from_dict(self.db.nobetmatik_config())
         self.cfg = saved
         self.month.set(month or U.dt.date.today().strftime("%Y-%m"))
-        self.rules = ([("fixed", r) for r in saved.fixed] +
+        self.rules = ([("exempt", [t, why]) for t, why in saved.exempt.items()] +
+                      [("fixed", r) for r in saved.fixed] +
                       [("together", r) for r in saved.together] +
                       [("apart", r) for r in saved.apart] +
                       [("allowed", [t, d]) for t, d in saved.allowed_days.items()])
@@ -330,26 +355,15 @@ class NobetmatikPage(QWidget):
             days = [DAYS[d][:3] + f" {lesson_count(self.schedule, t, d)}"
                     for d in range(5) if lesson_count(self.schedule, t, d)]
             self.teach.setItem(r, 2, U._item("  ".join(days)))
-            ex = QTableWidgetItem()
-            ex.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            ex.setCheckState(Qt.Checked if t in self.cfg.exempt else Qt.Unchecked)
-            self.teach.setItem(r, 3, ex)
-            reason = QLineEdit(self.cfg.exempt.get(t, ""))
-            reason.setPlaceholderText("Muafsa mazereti yazın (ör. hamilelik, sağlık raporu)")
-            reason.textChanged.connect(lambda txt, row=r: self._reason_typed(row, txt))
-            self.teach.setCellWidget(r, 4, reason)
         self.teach_info.setText(
             f"Ders programından {len(teachers)} öğretmen alındı (idareciler hariç). Nöbet "
-            "tutmayacakların işaretini kaldırın; <b>muaf</b> olanları işaretleyip mazeretini yazın.")
+            "tutmayacakların işaretini kaldırın. Muafiyetleri 4. adımda (Kurallar) mazeretiyle "
+            "ekleyebilirsiniz.")
         names = ["—"] + sorted(admins, key=normalize)
         for d, c in enumerate(self.admin_combos):
             c.clear()
             c.addItems(names)
             c.setCurrentText(self.cfg.admins_by_day.get(str(d), "—"))
-
-    def _reason_typed(self, row, text):
-        if text.strip():
-            self.teach.item(row, 3).setCheckState(Qt.Checked)
 
     def _check_all(self, on):
         for r in range(self.teach.rowCount()):
@@ -377,13 +391,11 @@ class NobetmatikPage(QWidget):
     def _collect(self):
         c = self.cfg
         c.month = self.month.key()
-        c.teachers, c.exempt = [], {}
+        c.teachers = []
         for r in range(self.teach.rowCount()):
-            t = self.teach.item(r, 1).text()
             if self.teach.item(r, 0).checkState() == Qt.Checked:
-                c.teachers.append(t)
-            if self.teach.item(r, 3).checkState() == Qt.Checked:
-                c.exempt[t] = self.teach.cellWidget(r, 4).text().strip()
+                c.teachers.append(self.teach.item(r, 1).text())
+        c.exempt = {r[0]: r[1] for k, r in self.rules if k == "exempt"}
         c.places = []
         for r in range(self.places.rowCount()):
             name = (self.places.item(r, 0).text() if self.places.item(r, 0) else "").strip()
@@ -415,29 +427,103 @@ class NobetmatikPage(QWidget):
             self.rules_t.setItem(r, 0, U._item(RULE_KINDS[k]))
             self.rules_t.setItem(r, 1, U._item(rule_text(k, rule)))
 
-    def _add_rule(self, kind):
-        c = self._collect()
-        teachers = [t for t in c.teachers if t not in c.exempt]
-        if not teachers:
-            U._info(self, "Önce 1. adımda nöbet tutacak öğretmenleri seçin.")
+    def _add_rule(self):
+        teachers, _places = self._rule_teachers()
+        t = self.r_teacher.currentText().strip()
+        if t not in teachers:
+            U._info(self, "Listeden bir öğretmen seçin.")
             return
-        dlg = RuleDialog(self, kind, teachers, [p for p, _n in c.places])
-        if dlg.exec() == QDialog.Accepted:
-            rule = dlg.rule()
-            if kind == "allowed":
-                self.rules = [(k, r) for k, r in self.rules
-                              if not (k == "allowed" and r[0] == rule[0])]
-            if kind == "fixed":
-                self.rules = [(k, r) for k, r in self.rules
-                              if not (k == "fixed" and r["teacher"] == rule["teacher"])]
-            self.rules.append((kind, rule))
-            self._fill_rules()
+        kind = self.r_kind.currentData()
+        if kind == "fixed":
+            rule = {"teacher": t, "day": self.r_day.currentIndex(),
+                    "place": self.r_place.currentData()}
+        elif kind == "exempt":
+            rule = [t, self.r_reason.text().strip()]
+        elif kind in ("together", "apart"):
+            o = self.r_other.currentText().strip()
+            if o not in teachers or o == t:
+                U._info(self, "İkinci öğretmeni listeden seçin (aynı kişi olamaz).")
+                return
+            rule = [t, o]
+        else:
+            days = [i for i, c in enumerate(self.r_days) if c.isChecked()]
+            if not days:
+                U._info(self, "En az bir gün işaretleyin.")
+                return
+            rule = [t, days]
+        # Aynı öğretmen için tek "sabitle", tek "muaf", tek "gün kısıtı" olur
+        if kind in ("fixed", "exempt", "allowed"):
+            def same(k, r):
+                who = r["teacher"] if k == "fixed" else r[0]
+                return k == kind and who == t
+            self.rules = [(k, r) for k, r in self.rules if not same(k, r)]
+        self.rules.append((kind, rule))
+        self._fill_rules()
+        self.r_teacher.setCurrentText("")
+        self.r_reason.clear()
+        for c in self.r_days:
+            c.setChecked(False)
 
     def _remove_rule(self):
         r = self.rules_t.currentRow()
         if r >= 0:
             del self.rules[r]
             self._fill_rules()
+
+    # ------------------------------------------------------------ elle düzenleme
+    def _page_edit(self):
+        self.edit_t = QTableWidget(0, 3)
+        self.edit_t.setHorizontalHeaderLabels(["Öğretmen", "Nöbet günü", "O gün kaç dersi var"])
+        U._stretch(self.edit_t, 0)
+        self.edit_t.verticalHeader().hide()
+        self.edit_t.setSelectionMode(QAbstractItemView.NoSelection)
+        self.edit_t.setMinimumHeight(120)
+        self.edit_info = QLabel()
+        self.edit_info.setWordWrap(True)
+        prt = QPushButton("🖨  Baskı önizleme")
+        prt.clicked.connect(self.print_)
+        h = QHBoxLayout()
+        hint = QLabel("Dağıtımı beğenmediğiniz öğretmenin <b>nöbet gününü</b> buradan değiştirin; "
+                      "yerler yeniden hesaplanır. Bitince <b>Kaydet ve kullan</b>'a basın.")
+        hint.setWordWrap(True)
+        h.addWidget(hint, 1)
+        h.addWidget(prt)
+        p = QWidget()
+        v = QVBoxLayout(p)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.addLayout(h)
+        v.addWidget(self.edit_t, 1)
+        v.addWidget(self.edit_info)
+        return p
+
+    def _fill_edit(self):
+        if not self.result:
+            return
+        day_of = {t: d for d, ts in self.result.by_day.items() for t in ts}
+        teachers = sorted(set(day_of) | set(self.result.unassigned), key=normalize)
+        self.edit_t.setRowCount(len(teachers))
+        for r, t in enumerate(teachers):
+            self.edit_t.setItem(r, 0, U._item(t))
+            combo = QComboBox()
+            combo.addItem("— nöbet yok —", None)
+            for d, name in enumerate(DAYS):
+                combo.addItem(name, d)
+            combo.setCurrentIndex(day_of[t] + 1 if t in day_of else 0)
+            combo.currentIndexChanged.connect(lambda _i, who=t, cb=combo: self._move(who, cb))
+            self.edit_t.setCellWidget(r, 1, combo)
+            d = day_of.get(t)
+            self.edit_t.setItem(r, 2, U._item(str(lesson_count(self.schedule, t, d))
+                                              if d is not None else "—"))
+
+    def _move(self, teacher, combo):
+        note = move_teacher(self.cfg, self.result, self.schedule, teacher, combo.currentData())
+        self.edit_info.setText(f"<span style='color:#d97706'>⚠ {note}</span>" if note else
+                               f"✅ {teacher} için nöbet günü güncellendi.")
+        r = next(i for i in range(self.edit_t.rowCount()) if self.edit_t.item(i, 0).text() == teacher)
+        d = combo.currentData()
+        self.edit_t.setItem(r, 2, U._item(str(lesson_count(self.schedule, teacher, d))
+                                          if d is not None else "—"))
+        self._show_week(self.week.currentIndex())
 
     def go(self, index):
         cur = self.stack.currentIndex()
@@ -460,8 +546,12 @@ class NobetmatikPage(QWidget):
         self.save_btn.setVisible(last)
         if index == 1:
             self._update_capacity()
-        if last:
+        if index == 3:
+            self._prepare_rules_page()
+        if index == 4 and cur < 4:
             self.run()
+        if index == 5:
+            self._fill_edit()
 
     def run(self):
         c = self._collect()
@@ -484,8 +574,8 @@ class NobetmatikPage(QWidget):
         lines += [f"<span style='color:#d97706'>⚠ {w}</span>" for w in self.result.warnings]
         if self.result.unassigned:
             lines.append("Bu ay nöbet verilmeyenler: " + ", ".join(self.result.unassigned))
-        lines.append("Beğenmezseniz kuralları değiştirip <b>Yeniden dağıt</b>'a basın; "
-                     "uygunsa <b>Kaydet ve kullan</b>.")
+        lines.append("Beğenmezseniz <b>Yeniden dağıt</b>'a basın ya da <b>İleri</b> ile bir "
+                     "sonraki adımda günleri elle değiştirin.")
         self.res_info.setText("<br>".join(lines))
 
     def _show_week(self, w):

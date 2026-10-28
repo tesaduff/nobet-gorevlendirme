@@ -529,3 +529,15 @@ def test_nobetmatik_config_roundtrip_keeps_options():
     c = Config.from_dict({"rotate": True, "skip_free_days": False, "places": [["Bahçe", 3]]})
     d = Config.from_dict(c.to_dict())
     assert d.rotate is True and d.skip_free_days is False and d.places == [["Bahçe", 3]]
+
+
+def test_nobetmatik_manual_move():
+    from nobet.nobetmatik import Config, distribute, move_teacher
+    sched = _sched(6)
+    cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1], ["Zemin", 1]])
+    res = distribute(cfg, sched)
+    note = move_teacher(cfg, res, sched, "T1", 1)          # T1'in Salı dersi yok
+    assert "dersi olmadığı" in note and "T1" in res.by_day[1]
+    assert {e.weekday for e in res.entries if e.teacher == "T1"} == {1}
+    move_teacher(cfg, res, sched, "T1", None)
+    assert "T1" in res.unassigned and not any(e.teacher == "T1" for e in res.entries)
