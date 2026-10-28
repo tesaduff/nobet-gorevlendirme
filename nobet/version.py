@@ -1,2 +1,2 @@
-# GitHub Actions bu dosyayı sürüm etiketine (ör. v1.2.0) göre yeniden yazar.
+# Bu numara artırılıp main'e gönderildiğinde GitHub Actions yeni sürümü yayınlar.
 __version__ = "1.0.0"

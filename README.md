@@ -67,7 +67,7 @@ python run.py            # programı çalıştır
 python -m pytest -q      # testler (reportlab gerekir)
 ```
 
-Yeni sürüm yayınlamak için `SURUM_NOTLARI.md` dosyasını güncelleyip `main`'e gönderin. Sonra
-GitHub'da **Releases → Draft a new release** sayfasında `v1.0.1` gibi yeni bir etiket yazıp
-**Publish release**'e basın. GitHub Actions testleri çalıştırır, Windows exe'sini derler ve
-birkaç dakika içinde o sürüme ekler.
+Yeni sürüm yayınlamak için `nobet/version.py` içindeki sürüm numarasını artırın
+(ör. `1.0.1`), `SURUM_NOTLARI.md` dosyasını güncelleyin ve `main`'e gönderin. GitHub Actions
+testleri çalıştırır, Windows exe'sini derler ve `v1.0.1` adıyla Releases'a yükler.
+Sürüm numarası değişmeyen gönderimlerde yalnızca testler çalışır.
