@@ -101,6 +101,11 @@ class NameMatcher:
         if key in self._by_norm:
             return self._by_norm[key]
         tokens = key.split()
+        # Boşluk farkı: "ÜMMÜGÜLSÜM KÖKLÜ" == "ÜMMÜ GÜLSÜM KÖKLÜ"
+        squashed = key.replace(" ", "")
+        hits = [n for n, k in self._norm.items() if k.replace(" ", "") == squashed]
+        if len(hits) == 1:
+            return hits[0]
         # Kelime kümesi: "YILMAZ Ahmet" == "Ahmet YILMAZ"
         hits = [n for n, k in self._norm.items() if sorted(k.split()) == sorted(tokens)]
         if len(hits) == 1:

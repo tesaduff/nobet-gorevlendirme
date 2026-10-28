@@ -174,6 +174,16 @@ class Database:
             rows = self.conn.execute(
                 "SELECT teacher, place FROM duty_entries WHERE month=? AND date IS NULL "
                 "AND weekday=?", (month, weekday)).fetchall()
+        if not rows:
+            # Haftalık çizelgede bu hafta yoksa aynı günün en yakın haftasını kullan.
+            near = self.conn.execute(
+                "SELECT date FROM duty_entries WHERE month=? AND weekday=? AND date IS NOT NULL "
+                "ORDER BY abs(julianday(date) - julianday(?)) LIMIT 1",
+                (month, weekday, date)).fetchone()
+            if near:
+                rows = self.conn.execute(
+                    "SELECT teacher, place FROM duty_entries WHERE month=? AND date=?",
+                    (month, near[0])).fetchall()
         return rows, month
 
     # ---- devamsızlık ve görevlendirme ----

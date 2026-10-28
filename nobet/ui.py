@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComb
 
 from . import export, updater
 from .db import Database, data_dir
-from .names import DAYS, NameMatcher, clean_name
-from .parse_duty import DutyEntry, parse_duty
+from .names import DAYS, NameMatcher, clean_name, normalize
+from .parse_duty import DutyEntry, is_admin_place, parse_duty
 from .parse_schedule import parse_schedule
 from .reader import ReadError, read_document
 from .scheduler import KIND_LABELS, options_for, plan_day, teachers_with_lessons
@@ -122,7 +122,7 @@ class ScheduleReviewDialog(QDialog):
         self.setWindowTitle("Ders programı önizleme — kontrol edip kaydedin")
         self.resize(1100, 700)
         self.result = result
-        self.names = sorted(result.teachers)
+        self.names = sorted(result.teachers, key=normalize)
 
         self.table = QTableWidget(len(self.names), 3)
         self.table.setHorizontalHeaderLabels(["Al", "Öğretmen (düzeltilebilir)", "Ders"])
@@ -206,7 +206,7 @@ class DutyEditDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Nöbet çizelgesi — kontrol edip kaydedin")
         self.resize(900, 650)
-        self.teachers = sorted(teachers)
+        self.teachers = sorted(teachers, key=normalize)
         self.matcher = NameMatcher(self.teachers)
 
         self.month = QDateEdit(_qdate(month + "-01"))
@@ -270,6 +270,10 @@ class DutyEditDialog(QDialog):
         who.setCompleter(comp)
         self.table.setCellWidget(r, 2, who)
         self.table.setItem(r, 3, _item(e.place, True))
+        if e.teacher and e.teacher not in self.teachers:
+            who.setStyleSheet("background:#ffd6d6")
+            who.setToolTip("Ders programında yok: bu öğretmenin hiç dersi yokmuş gibi "
+                           "davranılır. Yanlış okunduysa düzeltin ya da satırı silin.")
 
     def _remove(self):
         for r in sorted({i.row() for i in self.table.selectedIndexes()}, reverse=True):
@@ -413,7 +417,9 @@ class DailyTab(QWidget):
         vid = self.db.schedule_version_for(date)
         self.schedule = self.db.schedule(vid) if vid else {}
         duty, month = self.db.duty_for(date)
-        self.duty = duty
+        admins_teach = self.db.get_setting("admins_teach", "0") == "1"
+        self.duty = [(t, p) for t, p in duty if admins_teach or not is_admin_place(p)]
+        pool = {t for t, _ in self.duty}
         msgs = []
         if not self.schedule:
             msgs.append("<span style='color:#b00'>Ders programı yüklenmedi (Ders Programı sekmesi).</span>")
@@ -426,23 +432,26 @@ class DailyTab(QWidget):
         saved_abs = self.db.absences(date)
         if saved or saved_abs:
             msgs.append("<b style='color:#060'>Bu gün için kayıt var.</b>")
-        self.status.setText(" ".join(msgs) or f"{len(duty)} nöbetçi öğretmen.")
+        self.status.setText(" ".join(msgs) or f"{len(pool)} nöbetçi öğretmen.")
 
         teaching = teachers_with_lessons(self.schedule, wd)
         duty_place = {}
         for t, p in duty:
             duty_place[t] = (duty_place.get(t, "") + (", " if t in duty_place else "") + (p or "✓"))
         names = sorted(set(teaching) | set(duty_place) | set(saved_abs),
-                       key=lambda n: (n not in duty_place, n))
+                       key=lambda n: (n not in pool, n not in duty_place, normalize(n)))
         self.people.setRowCount(len(names))
         for r, n in enumerate(names):
             hours = sorted(h for (d, h) in self.schedule.get(n, {}) if d == wd)
             self.people.setItem(r, 0, _item(n))
             self.people.setItem(r, 1, _item(", ".join(map(str, hours)) or "—"))
             self.people.setItem(r, 2, _item(duty_place.get(n, "")))
-            if n in duty_place:
+            if n in pool:
                 for c in range(3):
                     self.people.item(r, c).setBackground(GREEN)
+            elif n in duty_place:
+                self.people.item(r, 2).setToolTip("Nöbetçi idareci: derse görevlendirilmez "
+                                                  "(Ayarlar'dan değiştirilebilir).")
             combo = QComboBox()
             combo.addItems(STATUSES)
             if n in saved_abs:
@@ -664,7 +673,7 @@ class ScheduleTab(QWidget):
         self.data = self.db.schedule(self.version)
         cur = self.teachers.currentItem().text() if self.teachers.currentItem() else None
         self.teachers.clear()
-        self.teachers.addItems(sorted(self.data))
+        self.teachers.addItems(sorted(self.data, key=normalize))
         items = self.teachers.findItems(cur or "", Qt.MatchExactly) if cur else []
         self.teachers.setCurrentRow(self.teachers.row(items[0]) if items else 0)
 
@@ -771,9 +780,10 @@ class DutyTab(QWidget):
         rem = QPushButton("Seçili ayı sil")
         rem.clicked.connect(self.delete)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(DAYS)
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Hafta"] + DAYS)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.setWordWrap(True)
         self.dated = QLabel()
         self.dated.setWordWrap(True)
@@ -815,20 +825,25 @@ class DutyTab(QWidget):
     def _show(self):
         m = self.month()
         rows = self.db.duty_rows(m) if m else []
-        cols = {d: [] for d in range(5)}
-        dated = []
-        for wd, date, t, p in rows:
+        weeks = {}
+        for wd, date, t, p in sorted(rows, key=lambda r: (r[1] or "", r[3] or "", r[2])):
             if date:
-                dated.append(f"{_qdate(date).toString('dd.MM')} {t}")
+                d = dt.date.fromisoformat(date)
+                key = (d - dt.timedelta(days=d.weekday())).isoformat()
             else:
-                cols[wd].append(f"{t}" + (f" — {p}" if p else ""))
-        n = max((len(v) for v in cols.values()), default=0)
-        self.table.setRowCount(n)
+                key = ""
+            weeks.setdefault(key, {i: [] for i in range(5)})[wd].append(
+                t + (f" — {p}" if p else ""))
+        self.table.setRowCount(len(weeks))
         self.table.clearContents()
-        for d, items in cols.items():
-            for r, text in enumerate(items):
-                self.table.setItem(r, d, _item(text))
-        self.dated.setText(("Tarihli nöbetler: " + ", ".join(dated)) if dated else "")
+        for r, key in enumerate(sorted(weeks)):
+            label = "Her hafta" if not key else _qdate(key).toString("dd.MM") + " haftası"
+            self.table.setItem(r, 0, _item(label))
+            for d, items in weeks[key].items():
+                self.table.setItem(r, d + 1, _item("\n".join(items)))
+        self.table.resizeRowsToContents()
+        self.dated.setText("Nöbet yeri 'idareci' olanlar varsayılan olarak derse görevlendirilmez."
+                           if any(is_admin_place(r[3]) for r in rows) else "")
 
     def _teachers(self):
         return self.db.all_teachers()
@@ -974,6 +989,11 @@ class SettingsTab(QWidget):
         f1.addRow("Bir nöbetçiye günde en fazla ders:", self.cap)
         f1.addRow("", QLabel("Sınıra ulaşan nöbetçinin yerine o saatte boş olan başka bir "
                              "öğretmen (notla) atanır; kimse yoksa yine nöbetçiye verilir."))
+        self.admins = QCheckBox("Nöbetçi idareciler (müdür yardımcıları) de boş derslere görevlendirilsin")
+        self.admins.setChecked(self.db.get_setting("admins_teach", "0") == "1")
+        self.admins.toggled.connect(lambda v: (self.db.set_setting("admins_teach", "1" if v else "0"),
+                                               win.changed()))
+        f1.addRow("", self.admins)
         g2 = QGroupBox("Güncelleme")
         v2 = QVBoxLayout(g2)
         v2.addWidget(self.upd)

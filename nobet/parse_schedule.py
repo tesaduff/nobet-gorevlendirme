@@ -258,10 +258,13 @@ def _parse_days_in_cols(grid, owner, kind, res, matcher, p_idx):
             labels = [parse_hour(grid[hour_row][c]) if hour_row is not None else None
                       for c in range(len(col_day))]
             has_hours = sum(1 for c in day_cols if labels[c] is not None) >= len(day_cols) * 0.6
-            if not has_hours:
-                labels = [None] * len(col_day)
+            if has_hours:
+                # "Öğle Arası" gibi saat olmayan sütunlar hiçbir saate sayılmaz.
+                hours = _hours_from_labels(
+                    labels, [d if labels[c] is not None else None for c, d in enumerate(col_day)])
+            else:
                 hour_row = r
-            hours = _hours_from_labels(labels, col_day)
+                hours = _hours_from_labels([None] * len(col_day), col_day)
             _parse_carsaf_rows(grid, hour_row + 1, col_day, hours, res, matcher, p_idx)
             res.layouts.append("çarşaf (satırlar öğretmen/şube)")
             return True
@@ -285,11 +288,14 @@ def _parse_days_in_cols(grid, owner, kind, res, matcher, p_idx):
             row_hours = list(range(1, len(labels) + 1))
         who = _owner_or_unknown(owner, res, p_idx)
         k = kind or ("class" if looks_like_class(who) else "teacher")
+        above = {}
         for i, h in zip(body, row_hours):
-            if not h:
-                continue
             for c in day_cols:
-                _emit(res, who, k, col_day[c], h, grid[i][c], matcher)
+                # Birleştirilmiş hücre (blok ders): üstteki hücrenin dersi devam eder.
+                v = grid[i][c] if grid[i][c] is not None else above.get(c)
+                above[c] = v
+                if h:
+                    _emit(res, who, k, col_day[c], h, v, matcher)
         res.layouts.append("sayfa başına " + ("şube" if k == "class" else "öğretmen"))
         return True
     return False
@@ -314,10 +320,16 @@ def _parse_carsaf_rows(grid, start, col_day, hours, res, matcher, p_idx):
                                       (matcher and matcher.match(label))):
             if len(normalize(label).split()) < 2:
                 continue
+        prev = None
         for c, d in enumerate(col_day):
+            v = row[c]
+            # Birleştirilmiş hücre (blok ders): soldaki hücrenin dersi aynı gün içinde devam eder.
+            if v is None and c > 0 and d is not None and col_day[c - 1] == d:
+                v = prev
+            prev = v
             if d is None or not hours[c]:
                 continue
-            _emit(res, clean_name(label), kind, d, hours[c], row[c], matcher)
+            _emit(res, clean_name(label), kind, d, hours[c], v, matcher)
 
 
 def _parse_days_in_rows(grid, owner, kind, res, matcher, p_idx):
