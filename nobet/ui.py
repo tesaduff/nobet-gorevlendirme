@@ -1069,7 +1069,7 @@ class MainWindow(QMainWindow):
         def done(info):
             self.settings.upd.setText(f"Yüklü sürüm: <b>{__version__}</b> — GitHub'daki son sürüm: "
                                       f"<b>{info['version'] or '?'}</b>")
-            if not updater.is_newer(info["version"]):
+            if not updater.is_newer(info["version"]) or not info["url"]:
                 if not silent:
                     _info(self, f"Program güncel (v{__version__}).", "Güncelleme")
                 return
