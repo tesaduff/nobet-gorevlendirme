@@ -636,19 +636,13 @@ class NobetmatikPage(QWidget):
         places = [p for p, _n in self.cfg.places]
         has_admin = any(e.place == ADMIN_PLACE for e in self.result.entries)
         cols = ["Gün"] + places + (["Nöbetçi idareci"] if has_admin else [])
-        self.grid.clear()
-        self.grid.setColumnCount(len(cols))
-        self.grid.setHorizontalHeaderLabels(cols)
-        U._stretch(self.grid, *range(1, len(cols)))
-        dates = self.result.weeks[w][1]
-        self.grid.setRowCount(len(dates))
-        for r, date in enumerate(dates):
+        rows = []
+        for date in self.result.weeks[w][1]:
             iso = date.isoformat()
-            self.grid.setItem(r, 0, U._item(f"{DAYS[date.weekday()]}\n{date.strftime('%d.%m')}"))
-            for c, p in enumerate(places + ([ADMIN_PLACE] if has_admin else []), start=1):
-                names = [e.teacher for e in self.result.entries if e.date == iso and e.place == p]
-                self.grid.setItem(r, c, U._item("\n".join(names)))
-        self.grid.resizeRowsToContents()
+            cells = [[e.teacher for e in self.result.entries if e.date == iso and e.place == p]
+                     for p in places + ([ADMIN_PLACE] if has_admin else [])]
+            rows.append((f"{DAYS[date.weekday()]}\n{date.strftime('%d.%m.%Y')}", cells))
+        U.fill_duty_grid(self.grid, cols, rows)
 
     def print_(self):
         if not self.result:

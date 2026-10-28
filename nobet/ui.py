@@ -37,6 +37,62 @@ def _item(text, editable=False):
     return it
 
 
+def fill_duty_grid(table, headers, rows):
+    """Nöbet çizelgesi tablosunu düzenli çizer.
+
+    rows: [(gün etiketi, [[isim, ...], [isim, ...], ...]), ...] — her hücrede isimler alt alta.
+    Gün sütunu sabit genişlikte, yer sütunları eşit genişlikte; isimler sola-yukarı hizalı.
+    """
+    from PySide6.QtGui import QFontMetrics
+    table.clear()
+    table.setColumnCount(len(headers))
+    table.setRowCount(len(rows))
+    table.setHorizontalHeaderLabels(headers)
+    table.setShowGrid(True)
+    table.setAlternatingRowColors(False)
+    table.setWordWrap(True)
+    table.setTextElideMode(Qt.ElideNone)
+    table.verticalHeader().hide()
+    table.setSelectionMode(QAbstractItemView.NoSelection)
+    table.setFocusPolicy(Qt.NoFocus)
+    h = table.horizontalHeader()
+    h.setSectionResizeMode(0, QHeaderView.Fixed)
+    table.setColumnWidth(0, 118)
+    for c in range(1, len(headers)):
+        h.setSectionResizeMode(c, QHeaderView.Stretch)
+    if headers and headers[-1] == "Nöbetçi idareci":
+        h.setSectionResizeMode(len(headers) - 1, QHeaderView.Fixed)
+        table.setColumnWidth(len(headers) - 1, 150)
+    h.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    line = QFontMetrics(table.font()).lineSpacing()
+    for r, (label, cells) in enumerate(rows):
+        day = _item(label)
+        f = day.font()
+        f.setBold(True)
+        day.setFont(f)
+        day.setTextAlignment(Qt.AlignLeft | Qt.AlignTop)
+        day.setBackground(BLUE)
+        table.setItem(r, 0, day)
+        most = max([2] + [len(names) for names in cells])
+        for c, names in enumerate(cells, start=1):
+            it = _item("\n".join(names))
+            it.setTextAlignment(Qt.AlignLeft | Qt.AlignTop)
+            table.setItem(r, c, it)
+        table.setRowHeight(r, most * line + 18)
+    # Satır yüksekliğini sütunlar son genişliğini aldıktan sonra içeriğe göre ayarla; pencere
+    # boyutu değişince yeniden hesapla (uzun isim kesilmesin, satırlar da gereksiz uzamasın).
+    def fit():
+        table.resizeRowsToContents()
+        for r in range(table.rowCount()):
+            table.setRowHeight(r, table.rowHeight(r) + 6)
+    fit()
+    QTimer.singleShot(0, fit)
+    if not getattr(table, "_fit_hooked", False):
+        table._fit_hooked = True
+        h.sectionResized.connect(lambda *_: QTimer.singleShot(0, table._fit))
+    table._fit = fit
+
+
 def _qdate(iso):
     return QDate.fromString(iso, "yyyy-MM-dd")
 
@@ -1492,23 +1548,38 @@ class DutyTab(QWidget):
     def _show(self):
         m = self.month()
         rows = self.db.duty_rows(m) if m else []
-        weeks = {}
-        for wd, date, t, p in sorted(rows, key=lambda r: (r[1] or "", r[3] or "", r[2])):
-            if date:
-                d = dt.date.fromisoformat(date)
-                key = (d - dt.timedelta(days=d.weekday())).isoformat()
-            else:
-                key = ""
-            weeks.setdefault(key, {i: [] for i in range(5)})[wd].append(
-                t + (f"  ({p})" if p else ""))
-        self.table.setRowCount(len(weeks))
-        self.table.clearContents()
-        for r, key in enumerate(sorted(weeks)):
-            label = "Her hafta" if not key else _qdate(key).toString("dd.MM") + " haftası"
-            self.table.setItem(r, 0, _item(label))
-            for d, items in weeks[key].items():
-                self.table.setItem(r, d + 1, _item("\n".join(items)))
-        self.table.resizeRowsToContents()
+        cfg = self.db.nobetmatik_config()
+        places = [p for p, _n in cfg.get("places", [])] if cfg.get("month") == m else []
+        places = [p for p in places if any(r[3] == p for r in rows)]
+        for _wd, _d, _t, p in rows:
+            if p and p not in places and not is_admin_place(p):
+                places.append(p)
+        has_admin = any(is_admin_place(p or "") for *_x, p in rows)
+        cols = places + (["Nöbetçi idareci"] if has_admin else [])
+        dated = any(d for _wd, d, _t, _p in rows)
+        grid_rows = []
+        if dated:
+            by_date = {}
+            for wd, d, t, p in rows:
+                if d:
+                    by_date.setdefault(d, []).append((t, p))
+            for d in sorted(by_date):
+                q = _qdate(d)
+                label = f"{DAYS[q.dayOfWeek() - 1]}\n{q.toString('dd.MM.yyyy')}"
+                cells = [[t for t, p in by_date[d] if p == col] for col in places]
+                if has_admin:
+                    cells.append([t for t, p in by_date[d] if is_admin_place(p or "")])
+                grid_rows.append((label, cells))
+        else:
+            for wd in range(5):
+                day_rows = [(t, p) for w, _d, t, p in rows if w == wd]
+                cells = [[t for t, p in day_rows if p == col] for col in places]
+                if has_admin:
+                    cells.append([t for t, p in day_rows if is_admin_place(p or "")])
+                if not places and not has_admin:
+                    cells = [[t for t, _p in day_rows]]
+                grid_rows.append((f"{DAYS[wd]}\n(her hafta)", cells))
+        fill_duty_grid(self.table, ["Gün"] + (cols or ["Nöbetçiler"]), grid_rows)
         self.dated.setText("İdareciler otomatik görevlendirilmez; görevlendirme ekranında elle "
                            "seçilebilir."
                            if any(is_admin_place(r[3]) for r in rows) else "")

@@ -1,4 +1,8 @@
-Sürüm 1.9.0 — yeni ad: NöbetGörev
+Sürüm 1.9.1
+
+- Nöbet çizelgesi tablosu (Dağıt adımı ve Görüntüle ekranı) düzenli ve net: nöbet yeri sütunları eşit genişlikte, isimler alt alta ve sola hizalı, uzun isimler kesilmez, satır yükseklikleri içeriğe göre; yerler girdiğiniz sırayla gösterilir
+
+Sürüm 1.9.0'daki yenilikler — yeni ad: NöbetGörev
 
 - Programın yeni adı: NöbetGörev (Nöbet Çizelgesi ve Öğretmen Görevlendirme). Masaüstü kısayolu "NöbetGörev" olur, eski kısayol kaldırılır; verileriniz korunur
 - Yeni, daha etkili simge
