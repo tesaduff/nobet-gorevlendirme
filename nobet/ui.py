@@ -1105,8 +1105,19 @@ class MainWindow(QMainWindow):
 
         def failed(msg):
             if not silent:
-                QMessageBox.warning(self, "Güncelleme", msg)
+                self._update_failed(msg)
         self._start(Worker(updater.check), done, failed)
+
+    def _update_failed(self, msg):
+        box = QMessageBox(QMessageBox.Warning, "Güncelleme",
+                          f"{msg}\n\nYeni sürümü tarayıcıdan da indirebilirsiniz: indirdiğiniz "
+                          "NobetGorevlendirme.exe dosyasını eskisinin yerine koyun. "
+                          "Verileriniz silinmez.", parent=self)
+        open_btn = box.addButton("İndirme sayfasını aç", QMessageBox.AcceptRole)
+        box.addButton("Kapat", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            QDesktopServices.openUrl(QUrl(updater.RELEASES_PAGE))
 
     def _download(self, info):
         dlg = QProgressDialog("Yeni sürüm indiriliyor…", None, 0, 100, self)
@@ -1124,7 +1135,7 @@ class MainWindow(QMainWindow):
 
         def failed(msg):
             dlg.close()
-            QMessageBox.warning(self, "Güncelleme", msg)
+            self._update_failed(msg)
         self._start(w, done, failed)
 
 

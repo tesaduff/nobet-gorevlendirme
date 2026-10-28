@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,7 @@ from .version import __version__
 REPO = "tesaduff/nobet-gorevlendirme"
 ASSET_NAME = "NobetGorevlendirme.exe"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
+RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 
 
 class UpdateError(Exception):
@@ -26,10 +28,24 @@ def is_newer(remote, local=__version__):
     return _parse(remote) > _parse(local)
 
 
+def _ssl_context():
+    """Sertifikaları Windows'un kendi deposuyla doğrular.
+
+    Okul/kurum ağları (ör. MEB filtresi) HTTPS trafiğini kendi sertifikalarıyla denetler.
+    Bu sertifikalar Windows'a yüklüdür ama Python'un kendi listesinde yoktur; truststore
+    doğrulamayı işletim sistemine bırakarak tarayıcının güvendiği her bağlantıya güvenir.
+    """
+    try:
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except Exception:
+        return ssl.create_default_context()
+
+
 def _request(url, accept="application/vnd.github+json"):
     req = urllib.request.Request(url, headers={
         "Accept": accept, "User-Agent": "NobetGorevlendirme/" + __version__})
-    return urllib.request.urlopen(req, timeout=30)
+    return urllib.request.urlopen(req, timeout=30, context=_ssl_context())
 
 
 def check():

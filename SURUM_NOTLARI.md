@@ -1,4 +1,10 @@
-Sürüm 1.0.1 — gerçek okul belgeleriyle iyileştirmeler
+Sürüm 1.0.2
+
+Güncelleme:
+- Okul/kurum ağlarında (ör. MEB filtresi) "CERTIFICATE_VERIFY_FAILED" hatası giderildi; program artık Windows'un sertifika deposunu kullanıyor
+- Güncelleme yine de başarısız olursa indirme sayfasını tarayıcıda açan düğme eklendi
+
+Sürüm 1.0.1'deki iyileştirmeler (gerçek okul belgeleriyle):
 
 Ders programı okuma:
 - Birden fazla saate yayılan blok dersler (ör. 2-3-4. saat tek kutu) artık her saat için dolu sayılıyor
