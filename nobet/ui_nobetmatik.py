@@ -2,9 +2,9 @@
 import os
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QImage, QPageLayout, QTextDocument
+from PySide6.QtGui import QColor, QImage, QPageLayout, QTextDocument
 from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog,
-                               QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+                               QDialogButtonBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
                                QLineEdit, QPushButton, QRadioButton, QSpinBox, QStackedWidget,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -81,9 +81,21 @@ class NobetmatikPage(QWidget):
     def _page_teachers(self):
         self.month = U.MonthPicker()
         self.month.changed.connect(self._month_changed)
-        self.teach = QTableWidget(0, 3)
-        self.teach.setHorizontalHeaderLabels(["Nöbet tutar", "Öğretmen", "Ders günleri (ders sayısı)"])
-        U._stretch(self.teach, 1, 2)
+        # Sütunlar: nöbet tutar (ortalı onay kutusu) | öğretmen | her gün için ders sayısı
+        self.teach = QTableWidget(0, 7)
+        self.teach.setHorizontalHeaderLabels(["Nöbet tutar", "Öğretmen"] +
+                                             ["Pzt", "Sal", "Çar", "Per", "Cum"])
+        U._stretch(self.teach, 1)
+        hh = self.teach.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.Fixed)
+        self.teach.setColumnWidth(0, 110)
+        for c in range(2, 7):
+            hh.setSectionResizeMode(c, QHeaderView.Fixed)
+            self.teach.setColumnWidth(c, 70)
+            self.teach.horizontalHeaderItem(c).setToolTip(f"{DAYS[c - 2]} günkü ders sayısı")
+        hh.setDefaultAlignment(Qt.AlignCenter)
+        self.teach.setMaximumWidth(860)
+        self.teach_checks = []
         self.teach.verticalHeader().hide()
         self.teach.setSelectionMode(QAbstractItemView.NoSelection)
         self.teach.setMinimumHeight(140)
@@ -105,15 +117,22 @@ class NobetmatikPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.addLayout(top)
         v.addWidget(self.teach_info)
-        v.addWidget(self.teach, 1)
+        tc = QHBoxLayout()
+        tc.addStretch(1)
+        tc.addWidget(self.teach, 20)
+        tc.addStretch(1)
+        v.addLayout(tc, 1)
         return p
 
     def _page_places(self):
         self.places = QTableWidget(0, 2)
         self.places.setHorizontalHeaderLabels(["Nöbet yeri", "Her gün kaç nöbetçi?"])
         U._stretch(self.places, 0)
+        self.places.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.places.setColumnWidth(1, 190)
         self.places.verticalHeader().hide()
         self.places.setMinimumHeight(120)
+        self.places.setFixedWidth(560)
         add = QPushButton("＋  Yer ekle")
         add.clicked.connect(lambda: self._add_place("", 1))
         rem = variant(QPushButton("Seçili yeri sil"), "danger")
@@ -124,19 +143,27 @@ class NobetmatikPage(QWidget):
         self.fit.clicked.connect(self._fit_capacity)
         h = QHBoxLayout()
         h.addWidget(add)
-        h.addWidget(rem)
         h.addStretch()
-        p = QWidget()
-        v = QVBoxLayout(p)
-        v.setContentsMargins(0, 0, 0, 0)
+        h.addWidget(rem)
+        self.cap_info.setFixedWidth(560)
         hint = QLabel("Okulunuzdaki nöbet yerlerini (Bahçe, Zemin Kat, 1. Kat, 2. Kat, Kantin…) ve "
                       "her yerde <b>her gün</b> kaç nöbetçi olacağını girin.")
         hint.setWordWrap(True)
+        hint.setAlignment(Qt.AlignCenter)
+        col = QVBoxLayout()
+        col.addWidget(self.places, 1)
+        col.addLayout(h)
+        col.addWidget(self.cap_info)
+        col.addWidget(self.fit)
+        center = QHBoxLayout()
+        center.addStretch()
+        center.addLayout(col)
+        center.addStretch()
+        p = QWidget()
+        v = QVBoxLayout(p)
+        v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(hint)
-        v.addWidget(self.places, 1)
-        v.addLayout(h)
-        v.addWidget(self.cap_info)
-        v.addWidget(self.fit, 0, Qt.AlignLeft)
+        v.addLayout(center, 1)
         return p
 
     def _page_options(self):
@@ -350,15 +377,25 @@ class NobetmatikPage(QWidget):
         teachers = sorted((t for t in self.schedule if t not in admins), key=normalize)
         known = set(self.cfg.teachers)
         self.teach.setRowCount(len(teachers))
+        self.teach_checks = []
         for r, t in enumerate(teachers):
-            chk = QTableWidgetItem()
-            chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-            chk.setCheckState(Qt.Checked if (t in known or not known) else Qt.Unchecked)
-            self.teach.setItem(r, 0, chk)
+            box = QCheckBox()
+            box.setChecked(t in known or not known)
+            box.setCursor(Qt.PointingHandCursor)
+            cell = QWidget()
+            ch = QHBoxLayout(cell)
+            ch.setContentsMargins(0, 0, 0, 0)
+            ch.addWidget(box, 0, Qt.AlignCenter)
+            self.teach.setCellWidget(r, 0, cell)
+            self.teach_checks.append(box)
             self.teach.setItem(r, 1, U._item(t))
-            days = [DAYS[d][:3] + f" {lesson_count(self.schedule, t, d)}"
-                    for d in range(5) if lesson_count(self.schedule, t, d)]
-            self.teach.setItem(r, 2, U._item("  ".join(days)))
+            for d in range(5):
+                n = lesson_count(self.schedule, t, d)
+                it = U._item(n if n else "–")
+                it.setTextAlignment(Qt.AlignCenter)
+                if not n:
+                    it.setForeground(QColor(theme.MUTED))
+                self.teach.setItem(r, 2 + d, it)
         self.teach_info.setText(
             f"Ders programından {len(teachers)} öğretmen alındı (idareciler hariç). Nöbet "
             "tutmayacakların işaretini kaldırın. Muafiyetleri 4. adımda (Kurallar) mazeretiyle "
@@ -370,8 +407,8 @@ class NobetmatikPage(QWidget):
             c.setCurrentText(self.cfg.admins_by_day.get(str(d), "—"))
 
     def _check_all(self, on):
-        for r in range(self.teach.rowCount()):
-            self.teach.item(r, 0).setCheckState(Qt.Checked if on else Qt.Unchecked)
+        for box in self.teach_checks:
+            box.setChecked(on)
 
     def _add_place(self, name, count):
         r = self.places.rowCount()
@@ -397,7 +434,7 @@ class NobetmatikPage(QWidget):
         c.month = self.month.key()
         c.teachers = []
         for r in range(self.teach.rowCount()):
-            if self.teach.item(r, 0).checkState() == Qt.Checked:
+            if self.teach_checks[r].isChecked():
                 c.teachers.append(self.teach.item(r, 1).text())
         c.exempt = {r[0]: r[1] for k, r in self.rules if k == "exempt"}
         c.places = []

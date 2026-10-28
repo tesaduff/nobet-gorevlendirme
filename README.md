@@ -26,15 +26,18 @@ kayıtlar yine de korunur ve dosya bir sonraki kayıtta güncellenir.
 
 ## Kullanım
 
+0. **Okul Bilgileri** → okul adı, il/ilçe, müdür, müdür yardımcıları ve logo. Yeni kurulumda
+   program bu sayfayla açılır.
 1. **Ders Programı** → *Yeni ders programı yükle* (e-Okul/MEBBİS PDF'i veya Excel). Okunanları
-   kontrol edip kaydedin. Hemen ardından **İdarecileri belirle** ile okul müdürü ve müdür
-   yardımcılarını işaretleyin; onlara otomatik görev verilmez.
+   kontrol edip kaydedin. Hemen ardından **İdarecileri belirle** ile her idarecinin görevini (Okul
+   Müdürü / Müdür Yardımcısı / Diğer idareci) seçin; onlara otomatik görev verilmez.
 2. **Nöbet Çizelgesi** → *Otomatik oluştur*, *Hazır çizelgem var (PDF/Excel)* veya *Elle gir*. Adım adım: ay ve öğretmenler (muaflar ve
    mazeretleri), nöbet yerleri ve kişi sayıları, seçenekler, kurallar (sabitle, beraber, ayrı, gün
    kısıtı), dağıt. Önizleyip yazdırın, **Kaydet ve kullan** deyin. Hazır çizelgeniz varsa
    *PDF/Excel'den yükle* ile de alabilirsiniz.
 3. **Görevlendirme** → tarihi seçin, gelmeyen öğretmenin durumunu (Raporlu, İzinli, Görevli…)
-   seçin, *Devam*, *Görevlendir*. Sonuç kaydedilir; isterseniz satır satır değiştirip yazdırın.
+   seçin, *Devam*, *Görevlendir*. İsterseniz satır satır değiştirin, sonra **Onayla** deyin;
+   görevlendirme ancak onaylanınca istatistiğe işlenir.
 4. **Aylık Rapor** → kim bu ay ve bu eğitim yılında kaç derse girdi.
 
 Yeni ay başlayınca program uyarır ve yeni nöbet çizelgesini oluşturmayı önerir.
@@ -51,7 +54,7 @@ Yeni ay başlayınca program uyarır ve yeni nöbet çizelgesini oluşturmayı �
 4. Kimse boş değilse ders **kırmızı** renkle *"atanamadı"* olarak işaretlenir.
 5. Ayarlar'dan isteğe bağlı *"bir nöbetçiye günde en fazla X ders"* sınırı konabilir.
 
-Yalnızca **kaydedilen** günler aylık sayımlara girer.
+Yalnızca **onaylanan** görevlendirmeler sayımlara girer.
 
 ### Desteklenen belge biçimleri
 

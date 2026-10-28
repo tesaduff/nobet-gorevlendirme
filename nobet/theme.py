@@ -5,7 +5,7 @@ import sys
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractScrollArea, QAbstractSpinBox, QComboBox, QFrame,
-                               QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QScrollArea,
+                               QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QScrollArea,
                                QStackedWidget, QVBoxLayout, QWidget)
 
 # Ayarlar'dan seçilebilen vurgu renkleri: ad -> (ana renk, üzerine gelince, açık ton, menü zemini)
@@ -80,7 +80,7 @@ QGroupBox {{
     margin-top: 14px; padding: 14px 12px 12px 12px; font-weight: 600;
 }}
 QGroupBox::title {{
-    subcontrol-origin: margin; left: 14px; padding: 2px 6px; color: {TEXT};
+    subcontrol-origin: margin; left: 14px; padding: 2px 8px; color: {a};
     background: transparent;
 }}
 QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px; }}
@@ -95,10 +95,17 @@ QPushButton:hover {{ background: {HOVER}; border-color: #94a3b8; }}
 QPushButton:pressed {{ background: {BORDER}; }}
 QPushButton:disabled {{ color: {MUTED}; background: {HEAD}; border-color: {BORDER}; }}
 QPushButton[variant="primary"] {{
-    background: {a}; color: white; border: none; font-weight: 600; padding: 9px 18px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {a}, stop:1 {a_hover});
+    color: white; border: none; font-weight: 600; padding: 9px 18px;
 }}
 QPushButton[variant="primary"]:hover {{ background: {a_hover}; }}
 QPushButton[variant="primary"]:disabled {{ background: #a5b4fc; color: #eef2ff; }}
+QPushButton[variant="success"] {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #16a34a, stop:1 #059669);
+    color: white; border: none; font-weight: 700; padding: 9px 18px;
+}}
+QPushButton[variant="success"]:hover {{ background: #15803d; }}
+QPushButton[variant="success"]:disabled {{ background: #bbf7d0; color: #166534; }}
 QPushButton[variant="danger"] {{ color: #ef4444; border-color: #fca5a5; }}
 QPushButton[variant="danger"]:hover {{ background: {HOVER}; }}
 QPushButton[variant="step"] {{
@@ -159,20 +166,53 @@ QStatusBar {{ background: {CARD}; color: {MUTED}; border-top: 1px solid {BORDER}
 QProgressDialog {{ background: {CARD}; }}
 
 /* Sol menü */
-QFrame#sidebar {{ background: {side}; }}
+QFrame#sidebar {{
+    background: qlineargradient(x1:0, y1:0, x2:0.4, y2:1, stop:0 {a_hover}, stop:0.45 {side},
+                                stop:1 {side});
+}}
 QLabel#brand {{ color: white; font-size: 13pt; font-weight: 700; }}
 QLabel#brandSub {{ color: #c7d2fe; font-size: 9pt; }}
+QFrame#brandLine {{ background: rgba(255, 255, 255, 0.16); max-height: 1px; margin: 0 22px; }}
+QPushButton#exit {{
+    background: rgba(255, 255, 255, 0.08); color: #fecaca; border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 8px; padding: 9px 12px; margin: 0 14px; font-weight: 600; text-align: center;
+}}
+QPushButton#exit:hover {{ background: #dc2626; color: white; border-color: #dc2626; }}
 QListWidget#nav {{ background: transparent; border: none; outline: none; }}
 QListWidget#nav::item {{
     color: #c7d2fe; padding: 11px 14px; margin: 2px 10px; border-radius: 8px; font-size: 10.5pt;
 }}
 QListWidget#nav::item:hover {{ background: rgba(255, 255, 255, 0.08); color: white; }}
-QListWidget#nav::item:selected {{ background: {a}; color: white; font-weight: 600; }}
+QListWidget#nav::item:selected {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a}, stop:1 {a_hover});
+    color: white; font-weight: 700; border-left: 4px solid white;
+}}
 
 /* Sayfa başlıkları ve özet kutucukları */
-QLabel#title {{ font-size: 17pt; font-weight: 700; color: {TEXT}; }}
-QLabel#subtitle {{ color: {MUTED}; }}
-QFrame#stat {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px; }}
+QFrame#header {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a_soft}, stop:1 {BG});
+    border: none; border-left: 5px solid {a}; border-radius: {R}px;
+}}
+QLabel#title {{ font-size: 17pt; font-weight: 800; color: {a}; background: transparent; }}
+QLabel#subtitle {{ color: {MUTED}; background: transparent; }}
+QFrame#stat {{
+    background: {CARD}; border: 1px solid {BORDER}; border-top: 4px solid {a};
+    border-radius: {R2}px;
+}}
+QLabel#logoBox {{
+    background: {a_soft}; border: 2px dashed {a}; border-radius: 66px; color: {MUTED};
+}}
+QLabel#stepOn {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a}, stop:1 {a_hover});
+    color: white; border-radius: 12px; font-weight: 700; padding: 4px 10px;
+}}
+QLabel#stepDone {{
+    background: {a_soft}; color: {a}; border-radius: 12px; font-weight: 600; padding: 4px 10px;
+}}
+QLabel#stepTodo {{
+    background: {HEAD}; color: {MUTED}; border: 1px solid {BORDER}; border-radius: 12px;
+    padding: 3px 9px;
+}}
 QLabel#statValue {{ font-size: 20pt; font-weight: 700; }}
 QLabel#statLabel {{ color: {MUTED}; font-size: 9pt; }}
 """
@@ -211,26 +251,32 @@ def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal",
     font = QFont(family or "Segoe UI")
     font.setPointSizeF(size)
     font.setStyleHint(QFont.SansSerif)
-    app.setFont(font)
-    app.setStyle("Fusion")
-    app.setStyleSheet(build_style(accent, dark, radius))
-    app.setWindowIcon(app_icon())
+    # Yalnızca değişen ayar uygulanır: her uygulama tüm pencereyi yeniden çizdirir.
+    if app.font() != font:
+        app.setFont(font)
+    if _guard is None:
+        app.setStyle("Fusion")
+        app.setWindowIcon(app_icon())
+    style = build_style(accent, dark, radius)
+    if app.styleSheet() != style:
+        app.setStyleSheet(style)
     if _guard is None:
         _guard = WheelGuard(app)
         app.installEventFilter(_guard)
 
 
 def variant(button, name):
-    """Düğmeye stil türü verir: primary, danger, step."""
+    """Düğmeye stil türü verir: primary, success, danger, step."""
     button.setProperty("variant", name)
     button.setCursor(Qt.PointingHandCursor)
     return button
 
 
 def page_header(title, subtitle=""):
-    w = QWidget()
+    w = QFrame()
+    w.setObjectName("header")
     v = QVBoxLayout(w)
-    v.setContentsMargins(2, 0, 0, 6)
+    v.setContentsMargins(16, 10, 12, 10)
     v.setSpacing(2)
     t = QLabel(title)
     t.setObjectName("title")
@@ -251,7 +297,8 @@ class StepBar(QFrame):
         self.setObjectName("card")
         self.labels = []
         h = QHBoxLayout(self)
-        h.setContentsMargins(14, 8, 14, 8)
+        h.setContentsMargins(10, 6, 10, 6)
+        h.setSpacing(4)
         for i, t in enumerate(titles):
             if i:
                 arrow = QLabel("›")
@@ -259,21 +306,20 @@ class StepBar(QFrame):
                 arrow.setStyleSheet("font-size:14pt")
                 h.addWidget(arrow)
             lab = QLabel(f"{i + 1}  {t}")
-            lab.setContentsMargins(10, 4, 10, 4)
             self.labels.append(lab)
             h.addWidget(lab)
         h.addStretch()
         self.set(0)
 
     def set(self, index):
+        # Renkler stil sayfasından gelir: tema değişince adım çubuğu da hemen değişir.
         for i, lab in enumerate(self.labels):
-            if i == index:
-                lab.setStyleSheet(f"background:{ACCENT}; color:white; border-radius:8px;"
-                                  " font-weight:700")
-            elif i < index:
-                lab.setStyleSheet(f"color:{ACCENT}; font-weight:600")
-            else:
-                lab.setStyleSheet(f"color:{MUTED}")
+            name = "stepOn" if i == index else "stepDone" if i < index else "stepTodo"
+            text = lab.text().split("  ", 1)[1]
+            lab.setText(f"✓  {text}" if i < index else f"{i + 1}  {text}")
+            lab.setObjectName(name)
+            lab.style().unpolish(lab)
+            lab.style().polish(lab)
 
 
 class StatCard(QFrame):
@@ -309,8 +355,9 @@ class NavPages(QWidget):
         sv.setContentsMargins(0, 22, 0, 16)
         sv.setSpacing(4)
         self.logo = QLabel()
-        self.logo.setFixedHeight(64)
-        self.logo.setContentsMargins(22, 0, 16, 6)
+        self.logo.setFixedHeight(78)
+        self.logo.setAlignment(Qt.AlignCenter)
+        self.logo.setContentsMargins(0, 0, 0, 6)
         sv.addWidget(self.logo)
         self.brand = b = QLabel(brand)
         b.setObjectName("brand")
@@ -319,17 +366,28 @@ class NavPages(QWidget):
         s.setObjectName("brandSub")
         s.setWordWrap(True)
         for lab in (b, s):
-            lab.setContentsMargins(22, 0, 16, 0)
+            lab.setAlignment(Qt.AlignCenter)
+            lab.setContentsMargins(14, 0, 14, 0)
             sv.addWidget(lab)
-        sv.addSpacing(18)
+        sv.addSpacing(12)
+        line = QFrame()
+        line.setObjectName("brandLine")
+        line.setFixedHeight(1)
+        sv.addWidget(line)
+        sv.addSpacing(10)
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         self.nav.setCursor(Qt.PointingHandCursor)
         sv.addWidget(self.nav, 1)
         self.footer = QLabel()
         self.footer.setObjectName("brandSub")
-        self.footer.setContentsMargins(22, 0, 16, 0)
+        self.footer.setContentsMargins(14, 6, 14, 0)
+        self.footer.setAlignment(Qt.AlignCenter)
         self.footer.setWordWrap(True)
+        self.exit_btn = QPushButton("⏻   Çıkış")
+        self.exit_btn.setObjectName("exit")
+        self.exit_btn.setCursor(Qt.PointingHandCursor)
+        sv.addWidget(self.exit_btn)
         sv.addWidget(self.footer)
 
         self.stack = QStackedWidget()
@@ -345,7 +403,7 @@ class NavPages(QWidget):
         self.brand.setText(title)
         self.brand_sub.setText(subtitle)
         if pixmap and not pixmap.isNull():
-            self.logo.setPixmap(pixmap.scaled(58, 58, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo.setPixmap(pixmap.scaled(72, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def addTab(self, widget, label, min_height=0):
         """Sayfayı kaydırılabilir alana koyar: küçük ekranlarda içerik sıkışmaz, kaydırılır."""

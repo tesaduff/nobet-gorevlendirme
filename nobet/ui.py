@@ -1,10 +1,11 @@
 """Ana pencere ve diyaloglar (PySide6)."""
 import datetime as dt
 import os
+import re
 import shutil
 
 from PySide6.QtCore import QDate, QLocale, QStandardPaths, Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QImage, QPageLayout, QPixmap, QTextDocument
+from PySide6.QtGui import QColor, QDesktopServices, QImage, QPageLayout, QPixmap, QTextDocument
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox,
                                QStackedWidget,
                                QFrame,
@@ -349,66 +350,94 @@ class MonthPicker(QWidget):
         return f"{self.y.currentText()}-{self.m.currentIndex() + 1:02d}"
 
 
-class SchoolDialog(QDialog):
+class SchoolTab(QWidget):
     """Okul adı, yöneticiler ve logo: çıktılarda ve sol menüde kullanılır."""
 
-    def __init__(self, parent, db):
-        super().__init__(parent)
-        self.db = db
-        self.setWindowTitle("Okul bilgileri")
-        self.resize(560, 420)
+    def __init__(self, win):
+        super().__init__()
+        self.win, self.db = win, win.db
         form = QFormLayout()
+        form.setVerticalSpacing(12)
+        form.setHorizontalSpacing(16)
         self.fields = {}
         for key, label, hint in SCHOOL_KEYS:
-            e = QLineEdit(db.get_setting(key, ""))
+            e = QLineEdit()
             e.setPlaceholderText(hint)
+            e.setMinimumHeight(36)
             self.fields[key] = e
             form.addRow(label + ":", e)
         self.logo = QLabel()
-        self.logo.setFixedSize(96, 96)
+        self.logo.setFixedSize(132, 132)
         self.logo.setAlignment(Qt.AlignCenter)
-        self.logo.setStyleSheet("border:1px dashed #94a3b8; border-radius:8px")
+        self.logo.setObjectName("logoBox")
         self.new_logo = None
         self.remove_logo = False
-        self._show_logo(logo_path() if os.path.exists(logo_path()) else None)
-        pick = QPushButton("Logo seç…")
+        pick = QPushButton("🖼  Logo seç…")
         pick.clicked.connect(self._pick)
         clear = QPushButton("Logoyu kaldır")
         clear.clicked.connect(self._clear)
-        lh = QHBoxLayout()
-        lh.addWidget(self.logo)
         lv = QVBoxLayout()
+        lv.addWidget(self.logo, 0, Qt.AlignHCenter)
         lv.addWidget(pick)
         lv.addWidget(clear)
         lv.addStretch()
-        lh.addLayout(lv)
-        lh.addStretch()
-        form.addRow("Okul logosu:", lh)
 
+        admins = QPushButton("👤  İdarecileri belirle (müdür / müdür yardımcısı)…")
+        admins.clicked.connect(lambda: self.win.sched.edit_admins())
+        save = variant(QPushButton("💾  Kaydet"), "primary")
+        save.setMinimumHeight(44)
+        save.setMinimumWidth(180)
+        save.clicked.connect(self.save)
         note = QLabel("Okul müdürü ve müdür yardımcılarına otomatik ders görevlendirmesi yapılmaz. "
-                      "Diğer idareciler ders programı yüklendikten sonra belirlenir.")
+                      "Ders programı yüklendikten sonra <b>İdarecileri belirle</b> ile listeden "
+                      "kimin müdür, kimin müdür yardımcısı olduğunu seçebilirsiniz.")
         note.setWordWrap(True)
         note.setObjectName("subtitle")
-        form.addRow("", note)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Save).setText("Kaydet")
-        variant(buttons.button(QDialogButtonBox.Save), "primary")
-        buttons.button(QDialogButtonBox.Cancel).setText("Vazgeç")
-        buttons.accepted.connect(self._save)
-        buttons.rejected.connect(self.reject)
+
+        card = QGroupBox("Okul")
+        h = QHBoxLayout(card)
+        h.setContentsMargins(20, 22, 20, 18)
+        h.setSpacing(28)
+        h.addLayout(lv)
+        right = QVBoxLayout()
+        right.addLayout(form)
+        right.addWidget(note)
+        right.addStretch()
+        h.addLayout(right, 1)
+        card.setMaximumWidth(900)
+        foot = QHBoxLayout()
+        foot.addWidget(admins)
+        foot.addStretch()
+        foot.addWidget(save)
+        wrap = QVBoxLayout()
+        wrap.addWidget(card)
+        wrap.addLayout(foot)
+        center = QHBoxLayout()
+        center.addStretch(1)
+        center.addLayout(wrap, 6)
+        center.addStretch(1)
         v = QVBoxLayout(self)
-        v.addWidget(page_header("Okul bilgileri",
-                                "Bu bilgiler yazdırılan çizelgede ve programın sol üst köşesinde görünür."))
-        v.addLayout(form)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.addWidget(page_header("🏫  Okul Bilgileri",
+                                "Bu bilgiler yazdırılan çizelgelerde ve programın sol üst "
+                                "köşesinde görünür."))
+        v.addLayout(center)
         v.addStretch()
-        v.addWidget(buttons)
+        self.refresh()
+
+    def refresh(self):
+        for key, e in self.fields.items():
+            e.setText(self.db.get_setting(key, ""))
+        self.new_logo, self.remove_logo = None, False
+        self._show_logo(logo_path() if os.path.exists(logo_path()) else None)
 
     def _show_logo(self, path):
         pm = QPixmap(path) if path else QPixmap()
         if pm.isNull():
+            self.logo.setPixmap(QPixmap())
             self.logo.setText("Logo yok")
         else:
-            self.logo.setPixmap(pm.scaled(88, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.logo.setPixmap(pm.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def _pick(self):
         path, _ = QFileDialog.getOpenFileName(self, "Logo seç", "",
@@ -419,24 +448,26 @@ class SchoolDialog(QDialog):
 
     def _clear(self):
         self.new_logo, self.remove_logo = None, True
-        self.logo.clear()
-        self.logo.setText("Logo yok")
+        self._show_logo(None)
 
-    def _save(self):
+    def save(self):
         if not self.fields["school"].text().strip():
             _info(self, "Lütfen okul adını yazın.")
-            return
-        for key, e in self.fields.items():
-            self.db.set_setting(key, e.text().strip())
+            return False
+        first = not self.db.get_setting("school")
         if self.new_logo:
             img = QImage(self.new_logo)
             if img.isNull():
                 _info(self, "Seçilen resim açılamadı.")
-                return
+                return False
             round_logo(img).save(logo_path())
         elif self.remove_logo and os.path.exists(logo_path()):
             os.remove(logo_path())
-        self.accept()
+        for key, e in self.fields.items():
+            self.db.set_setting(key, e.text().strip())
+        self.refresh()
+        self.win.school_saved(first)
+        return True
 
 
 class DutyEditDialog(QDialog):
@@ -561,6 +592,7 @@ class DailyTab(QWidget):
         super().__init__()
         self.win, self.db = win, win.db
         self.plan = None
+        self.approved = False
         self.schedule = {}
         self.duty = []
         self.admins = set()
@@ -702,17 +734,21 @@ class DailyTab(QWidget):
         xlsx.clicked.connect(self.to_excel)
         new = QPushButton("Yeni görevlendirme")
         new.clicked.connect(lambda: self.go(0))
+        self.approve_btn = variant(QPushButton("✅  Onayla ve istatistiğe işle"), "success")
+        self.approve_btn.clicked.connect(self.approve)
         delete = variant(QPushButton("Bu günün görevlendirmesini sil"), "danger")
         delete.clicked.connect(self.delete)
         f3 = QHBoxLayout()
-        for btn in (back3, prt, xlsx, new):
+        for btn in (back3, self.approve_btn, prt, xlsx, new):
             btn.setMinimumHeight(40)
             f3.addWidget(btn)
         f3.addStretch()
         f3.addWidget(delete)
         hint3 = QLabel("Değiştirmek istediğiniz satırda <b>Derse girecek öğretmen</b> kutusundan "
-                       "başka birini seçebilirsiniz; değişiklik hemen kaydedilir.")
+                       "başka birini seçebilirsiniz. Her şey uygunsa <b>Onayla</b>'ya basın; görevlendirme "
+                       "ancak onaylanınca istatistiğe işlenir.")
         hint3.setObjectName("subtitle")
+        hint3.setWordWrap(True)
         p3 = QWidget()
         v3 = QVBoxLayout(p3)
         v3.setContentsMargins(0, 0, 0, 0)
@@ -752,7 +788,7 @@ class DailyTab(QWidget):
         self.step0 = variant(QPushButton(), "step")
         self.step1 = variant(QPushButton(), "step")
         self.step2 = variant(QPushButton(), "step")
-        self.step0.clicked.connect(lambda: (self.win.edit_school(), self.refresh()))
+        self.step0.clicked.connect(self.win.edit_school)
         self.step1.clicked.connect(lambda: (self.win.sched.load_file(), self.refresh()))
         self.step2.clicked.connect(lambda: (self.win.duty.load_file(), self.refresh()))
         manual = QLabel("Belgeniz okunamazsa: <b>Ders Programı</b> bölümünde <i>Öğretmen ekle</i> "
@@ -983,11 +1019,9 @@ class DailyTab(QWidget):
                 if (a.hour, a.absent) in by_key:
                     a.assigned, a.kind, a.note = by_key[(a.hour, a.absent)]
         self._sections()
-        if saved:
-            self.show_plan()
-        else:
-            self._store()  # Görevlendir'e basınca hemen istatistiğe işlenir
-            self.saved_bar.show()
+        # Kayıtlı gün onaylı açılır; yeni görevlendirme onaylanana kadar taslaktır.
+        self.approved = bool(saved)
+        self.show_plan()
         self.steps.setCurrentIndex(2)
         self.stepbar.set(2)
 
@@ -1049,8 +1083,14 @@ class DailyTab(QWidget):
         if none:
             parts.append(f"<b style='color:#dc2626'>{none}</b> ders için boş öğretmen yok "
                          "(kırmızı satırlar)")
-        saved = bool(self.db.assignments(self.date_iso()))
-        parts.append("✅ kaydedildi" if saved else "henüz kaydedilmedi")
+        if self.approved:
+            parts.append("<b style='color:#16a34a'>✅ Onaylandı — istatistiğe işlendi</b>")
+        else:
+            parts.append("<b style='color:#d97706'>⏳ Onay bekliyor — henüz istatistiğe "
+                         "işlenmedi</b>")
+        self.approve_btn.setEnabled(not self.approved)
+        self.approve_btn.setText("✅  Onaylandı" if self.approved
+                                 else "✅  Onayla ve istatistiğe işle")
         self.summary.setText("  ·  ".join(parts))
 
     def _changed(self, row, combo):
@@ -1069,14 +1109,31 @@ class DailyTab(QWidget):
             else:
                 a.kind = "bos"
                 a.note = f"⚠ Elle seçildi; {t} nöbetçi değil ({lab})."
-        self._store()  # elle yapılan değişiklik de hemen kaydedilir
+        self.approved = False  # değişiklik yeniden onaylanmalı
+        self.show_plan()
 
     def save(self):
         if not self.plan:
             _info(self, "Kaydedilecek görevlendirme yok.")
             return
+        self.approve()
+
+    def approve(self):
+        if not self.plan:
+            return
         self._store()
-        self.refresh()
+        self.approved = True
+        self.show_plan()
+        self.saved_bar.show()
+
+    def _ensure_approved(self):
+        """Yazdırma/Excel öncesi onaylanmamış taslak için onay ister."""
+        if self.approved:
+            return True
+        if _ask(self, "Bu görevlendirme henüz onaylanmadı. Onaylayıp istatistiğe işleyelim mi?\n\n"
+                      "Hayır derseniz çıktı alınır ama istatistiğe işlenmez."):
+            self.approve()
+        return True
 
     def _store(self):
         """Günün görevlendirmesini istatistiğe kaydeder (aynı gün tekrar kaydedilirse yenilenir)."""
@@ -1085,8 +1142,6 @@ class DailyTab(QWidget):
             "✅ Görevlendirme istatistiğe kaydedildi. Sonraki görevlendirmeler bu kayda göre "
             "adil dağıtılır.", 6000)
         self.win.write_excel()
-        if self.plan:
-            self.show_plan()
 
     def delete(self):
         if _ask(self, "Bu günün devamsızlık ve görevlendirme kaydı silinsin mi?"):
@@ -1100,7 +1155,7 @@ class DailyTab(QWidget):
         path, _ = QFileDialog.getSaveFileName(
             self, "Excel olarak kaydet", f"gorevlendirme_{self.date_iso()}.xlsx", "Excel (*.xlsx)")
         if path:
-            self._store()
+            self._ensure_approved()
             export.save_day_xlsx(path, self.plan, self.win.school_header())
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
@@ -1109,7 +1164,7 @@ class DailyTab(QWidget):
             _info(self, "Önce gelmeyen öğretmenleri seçip 'Görevlendirmeyi Oluştur'a basın.")
             return
         from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-        self._store()
+        self._ensure_approved()
         doc = QTextDocument()
         has_logo = os.path.exists(logo_path())
         if has_logo:
@@ -1249,11 +1304,9 @@ class ScheduleTab(QWidget):
         if not self.db.all_teachers():
             _info(self, "Önce ders programını yükleyin.")
             return
-        dlg = AdminsDialog(self, self.db.all_teachers(), self.db.admins())
-        if dlg.exec() == QDialog.Accepted:
-            self.db.set_admins(dlg.selected())
-            self.db.set_setting("admins_confirmed", "1")
+        if AdminsDialog(self, self.db).exec() == QDialog.Accepted:
             self.refresh_admins()
+            self.win.school_tab.refresh()
             self.win.changed()
 
     def open_view(self):
@@ -1819,45 +1872,102 @@ class ReportTab(QWidget):
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
 
-class AdminsDialog(QDialog):
-    """Hiç görevlendirilmeyecek idarecileri seçme."""
+ROLES = ["—", "Okul Müdürü", "Müdür Yardımcısı", "Diğer idareci"]
 
-    def __init__(self, parent, teachers, selected):
+
+class AdminsDialog(QDialog):
+    """İdarecileri ve görevlerini (okul müdürü / müdür yardımcısı) seçme.
+
+    İdareci olarak seçilenlere otomatik ders görevlendirmesi yapılmaz."""
+
+    def __init__(self, parent, db):
         super().__init__(parent)
+        self.db = db
         self.setWindowTitle("İdareciler")
-        self.resize(460, 560)
+        self.resize(620, 620)
+        teachers = db.all_teachers()
+        selected = db.admins()
+        matcher = NameMatcher(teachers)
+        principal = matcher.match(db.get_setting("principal", "")) \
+            if db.get_setting("principal", "").strip() else None
+        vices = {matcher.match(n) for n in re.split(r"[,;\n]", db.get_setting("vice_principal", ""))
+                 if n.strip()}
         self.search = QLineEdit()
         self.search.setPlaceholderText("🔍  Öğretmen ara…")
-        self.list = QListWidget()
-        self.list.setObjectName("list")
-        for t in sorted(set(teachers) | set(selected), key=normalize):
-            it = QListWidgetItem(t)
-            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
-            it.setCheckState(Qt.Checked if t in selected else Qt.Unchecked)
-            self.list.addItem(it)
+        names = sorted(set(teachers) | set(selected), key=normalize)
+        self.table = QTableWidget(len(names), 2)
+        self.table.setHorizontalHeaderLabels(["Öğretmen", "Görevi"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.table.setColumnWidth(1, 200)
+        self.table.verticalHeader().hide()
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        self.table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.table.setFocusPolicy(Qt.NoFocus)
+        self.combos = []
+        for r, t in enumerate(names):
+            self.table.setItem(r, 0, _item(t))
+            c = QComboBox()
+            c.addItems(ROLES)
+            if t == principal:
+                c.setCurrentIndex(1)
+            elif t in vices:
+                c.setCurrentIndex(2)
+            elif t in selected:
+                c.setCurrentIndex(3)
+            c.currentIndexChanged.connect(lambda _i, row=r: self._mark(row))
+            self.table.setCellWidget(r, 1, c)
+            self.combos.append((t, c))
+            self._mark(r)
         self.search.textChanged.connect(self._filter)
         bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Save).setText("Kaydet")
         variant(bb.button(QDialogButtonBox.Save), "primary")
         bb.button(QDialogButtonBox.Cancel).setText("Vazgeç")
-        bb.accepted.connect(self.accept)
+        bb.accepted.connect(self._save)
         bb.rejected.connect(self.reject)
         v = QVBoxLayout(self)
-        v.addWidget(page_header("İdareciler", "İşaretlenenlere otomatik ders görevlendirmesi "
-                                              "yapılmaz; isterseniz sonuç ekranında elle seçersiniz."))
+        v.addWidget(page_header("👤  İdareciler",
+                                "Her idarecinin satırında <b>Görevi</b> kutusundan Okul Müdürü, "
+                                "Müdür Yardımcısı veya Diğer idareci seçin. Seçilenlere otomatik "
+                                "ders görevlendirmesi yapılmaz; isterseniz sonuç ekranında elle "
+                                "seçersiniz."))
         v.addWidget(self.search)
-        v.addWidget(self.list, 1)
+        v.addWidget(self.table, 1)
         v.addWidget(bb)
+
+    def _mark(self, row):
+        on = self.combos[row][1].currentIndex() > 0
+        it = self.table.item(row, 0)
+        f = it.font()
+        f.setBold(on)
+        it.setFont(f)
+        it.setBackground(theme.BLUE if on else QColor(0, 0, 0, 0))
 
     def _filter(self, text):
         key = normalize(text)
-        for i in range(self.list.count()):
-            it = self.list.item(i)
-            it.setHidden(bool(key) and key not in normalize(it.text()))
+        for r, (t, _c) in enumerate(self.combos):
+            self.table.setRowHidden(r, bool(key) and key not in normalize(t))
+
+    def roles(self):
+        return {t: ROLES[c.currentIndex()] for t, c in self.combos if c.currentIndex() > 0}
 
     def selected(self):
-        return {self.list.item(i).text() for i in range(self.list.count())
-                if self.list.item(i).checkState() == Qt.Checked}
+        return set(self.roles())
+
+    def _save(self):
+        roles = self.roles()
+        principals = [t for t, r in roles.items() if r == "Okul Müdürü"]
+        if len(principals) > 1:
+            _info(self, "Yalnızca bir kişiyi Okul Müdürü seçebilirsiniz.")
+            return
+        # Önce okul bilgilerindeki müdür / müdür yardımcısı güncellenir, sonra idareci listesi
+        self.db.set_setting("principal", principals[0] if principals else "")
+        self.db.set_setting("vice_principal", ", ".join(
+            t for t, r in roles.items() if r == "Müdür Yardımcısı"))
+        self.db.set_admins(set(roles))
+        self.db.set_setting("admins_confirmed", "1")
+        self.accept()
 
 
 class SettingsTab(QWidget):
@@ -1878,22 +1988,6 @@ class SettingsTab(QWidget):
             if not stretch_first:
                 h.addStretch()
             return h
-
-        # Okul
-        self.school_info = QLabel()
-        self.school_info.setWordWrap(True)
-        self.school_logo = QLabel()
-        self.school_logo.setFixedSize(72, 72)
-        self.school_logo.setAlignment(Qt.AlignCenter)
-        edit_school = variant(QPushButton("✏  Okul bilgilerini düzenle"), "primary")
-        edit_school.clicked.connect(win.edit_school)
-        self.refresh_school()
-        g0, l0 = card("Okul")
-        h0 = QHBoxLayout()
-        h0.addWidget(self.school_logo)
-        h0.addWidget(self.school_info, 1)
-        h0.addWidget(edit_school, 0, Qt.AlignTop)
-        l0.addLayout(h0)
 
         # Görünüm: renk kutucukları ve seçenek düğmeleri (açılır liste yerine tıkla-seç)
         gt, lt = card("Görünüm (tasarım)")
@@ -1947,7 +2041,7 @@ class SettingsTab(QWidget):
         ft.addRow("Satır aralığı:", choices("theme_density", list(theme.DENSITIES), "Normal"))
         ft.addRow("Köşeler:", choices("theme_radius", list(theme.RADII), "Normal"))
         lt.addLayout(ft)
-        note = QLabel("Seçim hemen uygulanır. Satır aralığı tablolara sayfa yenilenince yansır.")
+        note = QLabel("Seçim anında uygulanır. Satır aralığı tablolara sayfa açılınca yansır.")
         note.setObjectName("subtitle")
         lt.addWidget(note)
 
@@ -2036,7 +2130,7 @@ class SettingsTab(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(12)
         v.addWidget(page_header("Ayarlar"))
-        for g in (g0, gm, gt, g1, g4, g2, g3):
+        for g in (gt, gm, g1, g4, g2, g3):
             v.addWidget(g)
         v.addStretch()
 
@@ -2051,19 +2145,6 @@ class SettingsTab(QWidget):
         self.win.changed()
         self.win.go_first_step()
         _info(self, "Tüm veriler silindi. 1. adımdan, ders programını yükleyerek başlayın.")
-
-    def refresh_school(self):
-        info = self.win.school_info()
-        lines = [f"<b style='font-size:12pt'>{info['school'] or 'Okul adı girilmedi'}</b>"]
-        if info["school_city"]:
-            lines.append(info["school_city"])
-        if info["principal"]:
-            lines.append(f"Okul Müdürü: {info['principal']}")
-        if info["vice_principal"]:
-            lines.append(f"Müdür Yardımcısı: {info['vice_principal']}")
-        self.school_info.setText("<br>".join(lines))
-        pm = QPixmap(logo_path()) if os.path.exists(logo_path()) else theme.app_icon().pixmap(64, 64)
-        self.school_logo.setPixmap(pm.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def _paint_swatches(self):
         for name, (b, color) in self.swatches.items():
@@ -2094,8 +2175,20 @@ class SettingsTab(QWidget):
         self._theme_changed()
 
     def _theme_changed(self, *_):
-        self.win.apply_theme()
-        self.win.daily.refresh()
+        # Seçilen düğme önce boyanır, tema hemen ardından uygulanır (ardışık tıklamalar
+        # tek seferde uygulanır). Sayfalar yeniden kurulmaz, yalnızca stil değişir.
+        if not hasattr(self, "_theme_timer"):
+            self._theme_timer = QTimer(self)
+            self._theme_timer.setSingleShot(True)
+            self._theme_timer.timeout.connect(self._apply_theme_now)
+        self._theme_timer.start(15)
+
+    def _apply_theme_now(self):
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            self.win.apply_theme()
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def open_excel(self):
         path = self.win.excel_path()
@@ -2151,18 +2244,21 @@ class MainWindow(QMainWindow):
     def _build(self):
         self.tabs = theme.NavPages(APP_NAME, APP_TAGLINE)
         self.tabs.footer.setText(f"Sürüm {__version__}")
+        self.school_tab = SchoolTab(self)
         self.daily = DailyTab(self)
         self.sched = ScheduleTab(self)
         self.duty = DutyTab(self)
         self.report = ReportTab(self)
         self.settings = SettingsTab(self)
         # Sıra: önce ders programı, sonra nöbet çizelgesi, sonra görevlendirme
+        self.tabs.addTab(self.school_tab, "🏫   Okul Bilgileri")
         self.tabs.addTab(self.sched, "1   Ders Programı")
         self.tabs.addTab(self.duty, "2   Nöbet Çizelgesi")
         self.tabs.addTab(self.daily, "3   Görevlendirme")
         self.tabs.addTab(self.report, "📊   Aylık Rapor")
         self.tabs.addTab(self.settings, "⚙   Ayarlar")
         self.tabs.currentChanged.connect(self._tab_changed)
+        self.tabs.exit_btn.clicked.connect(self.quit)
         self.setCentralWidget(self.tabs)
         self.update_brand()
         self.go_first_step()
@@ -2172,15 +2268,30 @@ class MainWindow(QMainWindow):
         """İlk açılışta (başka bir okula kurulduğunda) önce okul bilgileri ve logo sorulur."""
         if self.db.get_setting("school"):
             return
-        _info(self, f"{APP_NAME}'e hoş geldiniz!\n\nÖnce okulunuzun bilgilerini girin: okul adı, "
-                    "il/ilçe, okul müdürü, müdür yardımcıları ve isterseniz logo. Sonra ders "
-                    "programını yükleyeceksiniz.", "Hoş geldiniz")
-        self.edit_school()
-        self.go_first_step()
+        self.tabs.setCurrentWidget(self.school_tab)
+        self.statusBar().showMessage(f"👋 {APP_NAME}'e hoş geldiniz! Önce okulunuzun bilgilerini "
+                                     "girip Kaydet'e basın.", 20000)
+
+    def school_saved(self, first):
+        self.update_brand()
+        self.write_excel()
+        if first and not self.db.schedule_versions():
+            _info(self, "✅ Okul bilgileri kaydedildi.\n\nSıradaki adım: 1 — Ders programı. "
+                        "Okulunuzun ders programını PDF veya Excel olarak yükleyin.",
+                  "Sonraki adım")
+            self.tabs.setCurrentWidget(self.sched)
+        else:
+            self.statusBar().showMessage("✅ Okul bilgileri kaydedildi.", 6000)
+
+    def quit(self):
+        if _ask(self, f"{APP_NAME} kapatılsın mı?", "Çıkış"):
+            QApplication.instance().quit()
 
     def go_first_step(self):
-        """Eksik olan ilk adımı açar: ders programı → nöbet çizelgesi → görevlendirme."""
-        if not self.db.schedule_versions():
+        """Eksik olan ilk adımı açar: okul → ders programı → nöbet çizelgesi → görevlendirme."""
+        if not self.db.get_setting("school"):
+            self.tabs.setCurrentWidget(self.school_tab)
+        elif not self.db.schedule_versions():
             self.tabs.setCurrentWidget(self.sched)
         elif not self.db.duty_months():
             self.tabs.setCurrentWidget(self.duty)
@@ -2194,11 +2305,9 @@ class MainWindow(QMainWindow):
         _info(self, "Okulunuzdaki idarecileri (okul müdürü, müdür yardımcıları) işaretleyin. "
                     "İşaretlenenlere otomatik ders görevlendirmesi yapılmaz; isterseniz "
                     "görevlendirme ekranında elle seçebilirsiniz.", "İdareciler")
-        dlg = AdminsDialog(self, self.db.all_teachers(), self.db.admins())
-        if dlg.exec() == QDialog.Accepted:
-            self.db.set_admins(dlg.selected())
-            self.db.set_setting("admins_confirmed", "1")
+        if AdminsDialog(self, self.db).exec() == QDialog.Accepted:
             self.sched.refresh_admins()
+            self.school_tab.refresh()
             self.daily.refresh()
 
     def next_step(self, done):
@@ -2257,11 +2366,16 @@ class MainWindow(QMainWindow):
         return " — ".join(x for x in (info["school"], info["school_city"]) if x)
 
     def edit_school(self):
-        if SchoolDialog(self, self.db).exec() == QDialog.Accepted:
-            self.settings.refresh_school()
-            self.update_brand()
-            self.daily.refresh()
-            self.write_excel()
+        self.tabs.setCurrentWidget(self.school_tab)
+
+    def reopen_db(self):
+        """Yedek geri yüklendikten sonra veritabanını yeniden açar ve sayfaları yeniler."""
+        self.db.__init__(self.db.path)
+        self.school_tab.refresh()
+        self.sched.refresh()
+        self.duty.refresh()
+        self.update_brand()
+        self.changed()
 
     def update_brand(self):
         if not hasattr(self, "tabs"):
@@ -2310,8 +2424,8 @@ class MainWindow(QMainWindow):
         elif w is self.sched:
             self.sched.steps.setCurrentIndex(0)
             self.sched.refresh(select=self.sched.version)
-        elif w is self.settings:
-            self.settings.refresh_school()
+        elif w is self.school_tab:
+            self.school_tab.refresh()
 
     # ---- güncelleme ----
     def _start(self, worker, done, failed=None):
