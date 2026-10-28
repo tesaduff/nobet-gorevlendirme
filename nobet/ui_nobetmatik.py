@@ -388,7 +388,9 @@ class NobetmatikPage(QWidget):
             ch.addWidget(box, 0, Qt.AlignCenter)
             self.teach.setCellWidget(r, 0, cell)
             self.teach_checks.append(box)
-            self.teach.setItem(r, 1, U._item(t))
+            name = U._item(t)
+            name.setTextAlignment(Qt.AlignCenter)
+            self.teach.setItem(r, 1, name)
             for d in range(5):
                 n = lesson_count(self.schedule, t, d)
                 it = U._item(n if n else "–")

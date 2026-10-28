@@ -1,4 +1,8 @@
-Sürüm 2.0.0
+Sürüm 2.0.1
+
+- Nöbetmatik öğretmen listesinde öğretmen adları da ortalı
+
+Sürüm 2.0.0'daki yenilikler
 
 - Görevlendirmede onay adımı: "Görevlendir" önce taslak oluşturur, istediğiniz değişikliği yaparsınız; "✅ Onayla ve istatistiğe işle" deyince kaydedilir. Onaydan sonra değişiklik yaparsanız yeniden onay ister. Yazdırırken onaylanmamışsa sorar
 - Sol menüde en üstte "Okul Bilgileri" sayfası: okul adı, il/ilçe, müdür, müdür yardımcıları ve logo. Yeni kurulumda program bu sayfayla açılır
