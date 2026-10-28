@@ -2238,6 +2238,35 @@ class SettingsTab(QWidget):
             _info(self, "Yedek geri yüklendi.")
 
 
+class UpdateDialog(QDialog):
+    """Yeni sürüm sorusu: yenilikler kaydırılabilir kutuda, Evet/Hayır her zaman görünür."""
+
+    def __init__(self, parent, info):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QTextBrowser
+        self.setWindowTitle("Güncelleme")
+        notes = QTextBrowser()
+        notes.setOpenExternalLinks(True)
+        notes.setMarkdown(info.get("notes", "").strip() or "Sürüm notu yok.")
+        bb = QDialogButtonBox(QDialogButtonBox.Yes | QDialogButtonBox.No)
+        bb.button(QDialogButtonBox.Yes).setText("Evet, şimdi güncelle")
+        variant(bb.button(QDialogButtonBox.Yes), "primary")
+        bb.button(QDialogButtonBox.No).setText("Hayır, sonra")
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        ask = QLabel("Şimdi indirilip kurulsun mu? Program kapanıp yeni sürümle yeniden açılacak; "
+                     "verileriniz silinmez.")
+        ask.setWordWrap(True)
+        v = QVBoxLayout(self)
+        v.addWidget(page_header(f"🔄  Yeni sürüm: v{info['version']}",
+                                f"Yüklü sürüm: v{__version__}. Yenilikler:"))
+        v.addWidget(notes, 1)
+        v.addWidget(ask)
+        v.addWidget(bb)
+        screen = (parent.screen() if parent else QApplication.primaryScreen()).availableGeometry()
+        self.resize(min(640, int(screen.width() * 0.9)), min(560, int(screen.height() * 0.8)))
+
+
 # ---------------------------------------------------------------- ana pencere
 
 class MainWindow(QMainWindow):
@@ -2462,10 +2491,7 @@ class MainWindow(QMainWindow):
                 _info(self, f"Yeni sürüm var: v{info['version']}. Kaynak koddan çalıştırıyorsunuz; "
                             "'git pull' ile güncelleyin.", "Güncelleme")
                 return
-            notes = info["notes"].strip()[:1500]
-            if _ask(self, f"Yeni sürüm mevcut: v{info['version']} (yüklü: v{__version__}).\n\n"
-                          f"{notes}\n\nŞimdi indirilip kurulsun mu? Program yeniden başlayacak.",
-                    "Güncelleme"):
+            if UpdateDialog(self, info).exec() == QDialog.Accepted:
                 self._download(info)
 
         def failed(msg):

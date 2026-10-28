@@ -1,4 +1,8 @@
-Sürüm 2.0.4
+Sürüm 2.0.5
+
+- Güncelleme penceresi: yenilikler kaydırılabilir kutuda, Evet / Hayır düğmeleri her zaman görünür
+
+Sürüm 2.0.4'teki yenilikler
 
 - Okul Bilgileri sayfasında idareci adları yazmaz, yalnızca nereden seçileceği açıklanır
 
