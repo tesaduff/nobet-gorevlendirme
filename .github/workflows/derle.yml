@@ -68,8 +68,14 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
-          & $iscc "/DMyAppVersion=${{ steps.ver.outputs.version }}" installer.iss
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $out = & $iscc "/DMyAppVersion=${{ steps.ver.outputs.version }}" installer.iss 2>&1
+          $code = $LASTEXITCODE
+          $out | ForEach-Object { Write-Output $_ }
+          if ($code -ne 0) {
+            # Hata satırlarını GitHub uyarı notu olarak da göster
+            $out | Select-Object -Last 15 | ForEach-Object { Write-Output "::error::ISCC: $_" }
+            exit $code
+          }
       - name: Sürümü yayınla
         if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2

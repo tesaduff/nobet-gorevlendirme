@@ -58,18 +58,19 @@ Filename: "{app}\{#MyAppExe}"; Flags: nowait
 // bilgisayara yeniden kurulduğunda sıfırdan başlar.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  DataDir, ExcelDir: String;
+  DataDir, ExcelDir, Msg, NL: String;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
+    NL := Chr(13) + Chr(10);
     DataDir := ExpandConstant('{userappdata}\NobetGorevlendirme');
     ExcelDir := ExpandConstant('{userdocs}\Nöbet Görevlendirme');
+    Msg := 'Programın verileri de silinsin mi?' + NL + NL +
+      'Ders programı, nöbet çizelgeleri, görevlendirme kayıtları, okul bilgileri ve Excel ' +
+      'kayıt dosyası silinir. Program yeniden kurulursa sıfırdan başlar.' + NL + NL +
+      'Verileri saklamak istiyorsanız Hayır deyin.';
     if (not UninstallSilent) and DirExists(DataDir) then
-      if MsgBox('Programın verileri de silinsin mi?' + #13#10 + #13#10 +
-                'Ders programı, nöbet çizelgeleri, görevlendirme kayıtları, okul bilgileri ve ' +
-                'Excel kayıt dosyası silinir. Program yeniden kurulursa sıfırdan başlar.' +
-                #13#10 + #13#10 + 'Verileri saklamak istiyorsanız Hayır deyin.',
-                mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      if MsgBox(Msg, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
       begin
         DelTree(DataDir, True, True, True);
         if DirExists(ExcelDir) then
