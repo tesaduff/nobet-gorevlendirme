@@ -164,3 +164,25 @@ def _initial_match(a, b):
             continue
         return False
     return True
+
+
+_CLASS_RE = re.compile(r"(?<![\w/])(\d{1,2}\s*[-/.]?\s*[A-ZÇĞİÖŞÜ])(?![\wçğıöşü])")
+
+
+def split_info(info):
+    """'TÜRKÇE 6/B' veya '9-A Matematik' -> ('6/B', 'TÜRKÇE'). Sınıf bulunamazsa ('', info)."""
+    text = re.sub(r"\s+", " ", str(info or "")).strip()
+    classes = []
+    for m in _CLASS_RE.finditer(text):
+        c = m.group(1).replace(" ", "")
+        if c not in classes:
+            classes.append(c)
+    if not classes:
+        return "", text
+    lesson = _CLASS_RE.sub(" ", text)
+    lesson = re.sub(r"\s*\+\s*", " ", lesson)
+    words = []
+    for w in lesson.split():
+        if w not in words:
+            words.append(w)
+    return ", ".join(classes), " ".join(words).strip(" -,")

@@ -1,26 +1,61 @@
 """Modern görünüm: renkler, Qt stil sayfası ve sol menülü sayfa gezgini."""
+import os
+import sys
+
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QStackedWidget, QVBoxLayout, QWidget)
 
-ACCENT = "#4f46e5"
-ACCENT_HOVER = "#4338ca"
-ACCENT_SOFT = "#eef2ff"
-BG = "#f4f6fb"
-CARD = "#ffffff"
-BORDER = "#e2e8f0"
-TEXT = "#1e293b"
+# Ayarlar'dan seçilebilen vurgu renkleri: ad -> (ana renk, üzerine gelince, açık ton, menü zemini)
+ACCENTS = {
+    "Mor": ("#4f46e5", "#4338ca", "#eef2ff", "#1e1b4b"),
+    "Mavi": ("#2563eb", "#1d4ed8", "#eff6ff", "#172554"),
+    "Yeşil": ("#059669", "#047857", "#ecfdf5", "#022c22"),
+    "Turuncu": ("#ea580c", "#c2410c", "#fff7ed", "#431407"),
+    "Kırmızı": ("#dc2626", "#b91c1c", "#fef2f2", "#450a0a"),
+    "Gri": ("#475569", "#334155", "#f1f5f9", "#0f172a"),
+}
+
+# Tablo satır renkleri: arayüz bu nesneleri kullanır, tema değişince yerinde güncellenir.
+GREEN, YELLOW, RED, BLUE = QColor(), QColor(), QColor(), QColor()
+_ROWS = {False: ("#e7f8ee", "#fff6db", "#fde7e7", "#e8edff"),
+         True: ("#123527", "#3d3315", "#47201f", "#252b4d")}
+
+ACCENT = ACCENTS["Mor"][0]
 MUTED = "#64748b"
-SIDEBAR = "#1e1b4b"
 
-# Tablo satır renkleri
-GREEN = QColor("#e7f8ee")
-YELLOW = QColor("#fff6db")
-RED = QColor("#fde7e7")
-BLUE = QColor("#e8edff")
 
-STYLE = f"""
+def resource(name):
+    """Paketlenmiş (PyInstaller) veya kaynak koddan çalışırken assets/ içindeki dosya."""
+    base = getattr(sys, "_MEIPASS", os.path.join(os.path.dirname(__file__), ".."))
+    return os.path.join(base, "assets", name)
+
+
+def app_icon():
+    return QIcon(resource("icon.png"))
+
+
+def build_style(accent="Mor", dark=False):
+    global ACCENT, MUTED
+    a, a_hover, a_soft, side = ACCENTS.get(accent, ACCENTS["Mor"])
+    if dark:
+        BG, CARD, BORDER, TEXT, MUTED = "#0f172a", "#1e293b", "#334155", "#e2e8f0", "#94a3b8"
+        INPUT_BORDER, HOVER, HEAD, ALT = "#475569", "#273449", "#172033", "#223047"
+        a_soft = "#2b3357"
+        side = "#0b1120"
+    else:
+        BG, CARD, BORDER, TEXT, MUTED = "#f4f6fb", "#ffffff", "#e2e8f0", "#1e293b", "#64748b"
+        INPUT_BORDER, HOVER, HEAD, ALT = "#cbd5e1", "#f1f5f9", "#f8fafc", "#fafbfe"
+    ACCENT = a
+    for color, value in zip((GREEN, YELLOW, RED, BLUE), _ROWS[dark]):
+        color.setRgb(QColor(value).rgb())
+    values = dict(locals())
+    values["MUTED"] = MUTED
+    return STYLE.format(**values)
+
+
+STYLE = """
 QWidget {{ color: {TEXT}; font-size: 10pt; }}
 QMainWindow, QDialog, #page {{ background: {BG}; }}
 QToolTip {{ background: {TEXT}; color: white; border: none; padding: 6px; border-radius: 4px; }}
@@ -35,40 +70,40 @@ QGroupBox::title {{
     background: transparent;
 }}
 QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 12px; }}
-QFrame#hint {{ background: {ACCENT_SOFT}; border: 1px solid #c7d2fe; border-radius: 12px; }}
+QFrame#hint {{ background: {a_soft}; border: 1px solid {a}; border-radius: 12px; }}
 
 /* Düğmeler */
 QPushButton {{
-    background: {CARD}; border: 1px solid #cbd5e1; border-radius: 8px;
+    background: {CARD}; border: 1px solid {INPUT_BORDER}; border-radius: 8px;
     padding: 7px 14px; font-weight: 500;
 }}
-QPushButton:hover {{ background: #f1f5f9; border-color: #94a3b8; }}
-QPushButton:pressed {{ background: #e2e8f0; }}
-QPushButton:disabled {{ color: #a0aec0; background: #f8fafc; border-color: {BORDER}; }}
+QPushButton:hover {{ background: {HOVER}; border-color: #94a3b8; }}
+QPushButton:pressed {{ background: {BORDER}; }}
+QPushButton:disabled {{ color: {MUTED}; background: {HEAD}; border-color: {BORDER}; }}
 QPushButton[variant="primary"] {{
-    background: {ACCENT}; color: white; border: none; font-weight: 600; padding: 9px 18px;
+    background: {a}; color: white; border: none; font-weight: 600; padding: 9px 18px;
 }}
-QPushButton[variant="primary"]:hover {{ background: {ACCENT_HOVER}; }}
+QPushButton[variant="primary"]:hover {{ background: {a_hover}; }}
 QPushButton[variant="primary"]:disabled {{ background: #a5b4fc; color: #eef2ff; }}
-QPushButton[variant="danger"] {{ color: #b91c1c; border-color: #fecaca; }}
-QPushButton[variant="danger"]:hover {{ background: #fef2f2; }}
+QPushButton[variant="danger"] {{ color: #ef4444; border-color: #fca5a5; }}
+QPushButton[variant="danger"]:hover {{ background: {HOVER}; }}
 QPushButton[variant="step"] {{
     text-align: left; padding: 14px 16px; font-size: 11pt; font-weight: 600;
-    background: {CARD}; border: 1px solid #c7d2fe; border-radius: 10px;
+    background: {CARD}; border: 1px solid {a}; border-radius: 10px;
 }}
-QPushButton[variant="step"]:hover {{ background: #f5f7ff; border-color: {ACCENT}; }}
+QPushButton[variant="step"]:hover {{ background: {a_soft}; border-color: {a}; }}
 
 /* Giriş alanları */
 QLineEdit, QComboBox, QDateEdit, QSpinBox, QPlainTextEdit {{
-    background: {CARD}; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 8px;
-    selection-background-color: {ACCENT};
+    background: {CARD}; border: 1px solid {INPUT_BORDER}; border-radius: 7px; padding: 5px 8px;
+    selection-background-color: {a};
 }}
 QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QSpinBox:focus, QPlainTextEdit:focus {{
-    border: 1px solid {ACCENT};
+    border: 1px solid {a};
 }}
 QComboBox::drop-down, QDateEdit::drop-down {{ border: none; width: 22px; }}
 QComboBox QAbstractItemView {{
-    background: {CARD}; border: 1px solid {BORDER}; selection-background-color: {ACCENT_SOFT};
+    background: {CARD}; border: 1px solid {BORDER}; selection-background-color: {a_soft};
     selection-color: {TEXT}; outline: none;
 }}
 QCheckBox {{ spacing: 8px; }}
@@ -76,16 +111,16 @@ QCheckBox {{ spacing: 8px; }}
 /* Tablolar ve listeler */
 QTableWidget, QListWidget#list {{
     background: {CARD}; border: 1px solid {BORDER}; border-radius: 10px;
-    gridline-color: #eef2f7; alternate-background-color: #fafbfe;
-    selection-background-color: {ACCENT_SOFT}; selection-color: {TEXT};
+    gridline-color: #eef2f7; alternate-background-color: {ALT};
+    selection-background-color: {a_soft}; selection-color: {TEXT};
 }}
 QHeaderView::section {{
-    background: #f8fafc; color: {MUTED}; border: none; border-bottom: 1px solid {BORDER};
+    background: {HEAD}; color: {MUTED}; border: none; border-bottom: 1px solid {BORDER};
     padding: 7px 6px; font-weight: 600;
 }}
-QTableCornerButton::section {{ background: #f8fafc; border: none; }}
+QTableCornerButton::section {{ background: {HEAD}; border: none; }}
 QListWidget#list::item {{ padding: 7px 8px; border-radius: 6px; }}
-QListWidget#list::item:selected {{ background: {ACCENT_SOFT}; color: {TEXT}; }}
+QListWidget#list::item:selected {{ background: {a_soft}; color: {TEXT}; }}
 
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: #cbd5e1; border-radius: 4px; min-height: 30px; }}
@@ -97,15 +132,15 @@ QStatusBar {{ background: {CARD}; color: {MUTED}; border-top: 1px solid {BORDER}
 QProgressDialog {{ background: {CARD}; }}
 
 /* Sol menü */
-QFrame#sidebar {{ background: {SIDEBAR}; }}
+QFrame#sidebar {{ background: {side}; }}
 QLabel#brand {{ color: white; font-size: 13pt; font-weight: 700; }}
-QLabel#brandSub {{ color: #a5b4fc; font-size: 9pt; }}
+QLabel#brandSub {{ color: #c7d2fe; font-size: 9pt; }}
 QListWidget#nav {{ background: transparent; border: none; outline: none; }}
 QListWidget#nav::item {{
     color: #c7d2fe; padding: 11px 14px; margin: 2px 10px; border-radius: 8px; font-size: 10.5pt;
 }}
 QListWidget#nav::item:hover {{ background: rgba(255, 255, 255, 0.08); color: white; }}
-QListWidget#nav::item:selected {{ background: {ACCENT}; color: white; font-weight: 600; }}
+QListWidget#nav::item:selected {{ background: {a}; color: white; font-weight: 600; }}
 
 /* Sayfa başlıkları ve özet kutucukları */
 QLabel#title {{ font-size: 17pt; font-weight: 700; color: {TEXT}; }}
@@ -116,12 +151,13 @@ QLabel#statLabel {{ color: {MUTED}; font-size: 9pt; }}
 """
 
 
-def apply(app):
+def apply(app, accent="Mor", dark=False):
     font = QFont("Segoe UI", 10)
     font.setStyleHint(QFont.SansSerif)
     app.setFont(font)
     app.setStyle("Fusion")
-    app.setStyleSheet(STYLE)
+    app.setStyleSheet(build_style(accent, dark))
+    app.setWindowIcon(app_icon())
 
 
 def variant(button, name):
@@ -179,11 +215,16 @@ class NavPages(QWidget):
         sv = QVBoxLayout(side)
         sv.setContentsMargins(0, 22, 0, 16)
         sv.setSpacing(4)
-        b = QLabel(brand)
+        self.logo = QLabel()
+        self.logo.setFixedHeight(64)
+        self.logo.setContentsMargins(22, 0, 16, 6)
+        sv.addWidget(self.logo)
+        self.brand = b = QLabel(brand)
         b.setObjectName("brand")
         b.setWordWrap(True)
-        s = QLabel(subtitle)
+        self.brand_sub = s = QLabel(subtitle)
         s.setObjectName("brandSub")
+        s.setWordWrap(True)
         for lab in (b, s):
             lab.setContentsMargins(22, 0, 16, 0)
             sv.addWidget(lab)
@@ -206,6 +247,12 @@ class NavPages(QWidget):
         h.addWidget(side)
         h.addWidget(self.stack, 1)
         self.nav.currentRowChanged.connect(self._go)
+
+    def set_brand(self, title, subtitle, pixmap=None):
+        self.brand.setText(title)
+        self.brand_sub.setText(subtitle)
+        if pixmap and not pixmap.isNull():
+            self.logo.setPixmap(pixmap.scaled(58, 58, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def addTab(self, widget, label):
         page = QWidget()

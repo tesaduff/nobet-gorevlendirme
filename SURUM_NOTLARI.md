@@ -1,14 +1,13 @@
-Sürüm 1.1.0
+Sürüm 1.2.0
 
-Yenilikler:
-- Yeni modern tasarım: sol menü, kart görünümü, renkli düğmeler, günlük özet kutucukları
-- Kurulum sihirbazı (NobetGorevlendirme-Kurulum.exe): Başlat menüsü ve masaüstü kısayolu, Program Ekle/Kaldır; yönetici izni gerekmez
-- Excel kayıt dosyası: her kayıttan sonra Belgeler\Nöbet Görevlendirme\Kayıtlar.xlsx güncellenir (görevlendirmeler, devamsızlıklar, aylık özet, ders programı, nöbet çizelgesi). Konumu Ayarlar'dan değiştirilebilir
-- İlk açılışta "Başlarken" bölümü: ders programını ve nöbet çizelgesini yüklemek için adım adım düğmeler
-- Kurulu sürüm güncellemeleri sessizce uygular ve programı yeniden açar
+- Tek tıkla kurulum: NobetGorevlendirme-Kurulum.exe'ye çift tıklayın; soru sormadan kurulur, masaüstüne "Nöbetçi Öğretmen Görevlendirme" kısayolu eklenir ve program açılır
+- Yeni program simgesi
+- İlk açılışta 3 adımlı "Hoş geldiniz" yönlendirmesi: okul bilgileri, ders programı, nöbet çizelgesi
+- Okul ayarları: okul adı, il/ilçe, okul müdürü, müdür yardımcısı ve okul logosu
+- Tema ayarları: 6 renk seçeneği ve koyu görünüm
+- Görevlendirme ekranı ve çıktısı gelmeyen öğretmene göre gruplu: mazeret, saat, sınıf, ders ve derse girecek öğretmen
+- Yeni mazeret türleri: Sevkli, Kurs / Seminer ve elle yazılabilen "Diğer"
+- Resmî baskı çıktısı: okul logosu ve adı, imza sütunu, müdür yardımcısı ve okul müdürü imza alanları; baskı önizlemeli
+- Yazdırınca veya Excel'e aktarınca görevlendirme otomatik olarak istatistiğe kaydedilir
 
-Hangi dosyayı indirmeliyim?
-- NobetGorevlendirme-Kurulum.exe → bilgisayara kurmak için (önerilen)
-- NobetGorevlendirme.exe → kurmadan, taşınabilir olarak çalıştırmak için
-
-Verileriniz (%APPDATA%\NobetGorevlendirme) her iki durumda da korunur.
+Verileriniz korunur. Eski taşınabilir NobetGorevlendirme.exe dosyasını silebilirsiniz.

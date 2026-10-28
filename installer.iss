@@ -17,8 +17,14 @@ AppPublisherURL=https://github.com/tesaduff/nobet-gorevlendirme
 ; Kullanıcı klasörüne kurulur: yönetici izni gerekmez, güncelleme dosyaları yazabilir.
 PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\NobetGorevlendirme
+; Tek tıkla kurulum: soru sorulmaz, sayfalar atlanır, kurulum bitince program açılır.
+DisableWelcomePage=yes
 DisableProgramGroupPage=yes
 DisableDirPage=yes
+DisableReadyPage=yes
+DisableFinishedPage=yes
+ShowLanguageDialog=no
+SetupIconFile=assets\icon.ico
 OutputDir=dist
 OutputBaseFilename=NobetGorevlendirme-Kurulum
 Compression=lzma2
@@ -32,9 +38,6 @@ UninstallDisplayName={#MyAppName}
 [Languages]
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
-[Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-
 [InstallDelete]
 ; Eski sürümün kütüphaneleri yenileriyle karışmasın
 Type: filesandordirs; Name: "{app}\_internal"
@@ -44,8 +47,8 @@ Source: "dist\NobetGorevlendirme\*"; DestDir: "{app}"; Flags: ignoreversion recu
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"
 
 [Run]
-; Sessiz güncellemede de program yeniden açılır
-Filename: "{app}\{#MyAppExe}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall
+; Kurulum (ve sessiz güncelleme) bitince program kendiliğinden açılır
+Filename: "{app}\{#MyAppExe}"; Flags: nowait

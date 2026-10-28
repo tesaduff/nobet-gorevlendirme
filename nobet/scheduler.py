@@ -106,6 +106,8 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
             busy.setdefault(a.assigned, set()).add(h)
             today[a.assigned] = today.get(a.assigned, 0) + 1
 
+    # Ekranda ve çıktıda her gelmeyen öğretmenin dersleri saat sırasıyla alt alta görünür.
+    slots.sort(key=lambda a: (a.absent, a.hour))
     return DayPlan(date=date, weekday=weekday, duty=duty, teaching=teaching,
                    absences=dict(absences), assignments=slots)
 

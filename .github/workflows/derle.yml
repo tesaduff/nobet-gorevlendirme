@@ -60,8 +60,8 @@ jobs:
       - name: Programı derle (kurulum için klasör + taşınabilir tek dosya)
         if: steps.check.outputs.exists == 'false'
         run: |
-          pyinstaller --noconfirm --windowed --name NobetGorevlendirme run.py
-          pyinstaller --noconfirm --onefile --windowed --name NobetGorevlendirme --distpath tasinabilir --workpath build_tek run.py
+          pyinstaller --noconfirm --windowed --name NobetGorevlendirme --icon assets/icon.ico --add-data "assets;assets" run.py
+          pyinstaller --noconfirm --onefile --windowed --name NobetGorevlendirme --icon assets/icon.ico --add-data "assets;assets" --distpath tasinabilir --workpath build_tek run.py
       - name: Kurulum dosyasını oluştur (Inno Setup)
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
