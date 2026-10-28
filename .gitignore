@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+.pytest_cache/
+# Okul verileri ve belgeleri depoya gönderilmez
+*.db
+*.pdf
+*.xlsx
