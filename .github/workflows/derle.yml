@@ -1,10 +1,11 @@
 name: Windows exe derle ve yayınla
 
-# "v1.2.3" biçiminde bir etiket gönderildiğinde testler çalışır, exe derlenir ve
-# GitHub Releases'a yüklenir. Program "Güncellemeleri denetle" ile buradan günceller.
+# GitHub'da "v1.2.3" etiketli bir sürüm yayınlandığında testler çalışır, exe derlenir ve
+# o sürüme eklenir. Program "Güncellemeleri denetle" ile buradan günceller.
 on:
+  release:
+    types: [published]
   push:
-    tags: ["v*"]
     branches: [main]
   pull_request:
   workflow_dispatch:

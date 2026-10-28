@@ -67,10 +67,7 @@ python run.py            # programı çalıştır
 python -m pytest -q      # testler (reportlab gerekir)
 ```
 
-Yeni sürüm yayınlamak için önce `SURUM_NOTLARI.md` dosyasını güncelleyin, sonra etiket gönderin:
-
-```bash
-git tag v1.0.1 && git push origin v1.0.1
-```
-
-GitHub Actions testleri çalıştırır, Windows exe'sini derler ve Releases'a yükler.
+Yeni sürüm yayınlamak için `SURUM_NOTLARI.md` dosyasını güncelleyip `main`'e gönderin. Sonra
+GitHub'da **Releases → Draft a new release** sayfasında `v1.0.1` gibi yeni bir etiket yazıp
+**Publish release**'e basın. GitHub Actions testleri çalıştırır, Windows exe'sini derler ve
+birkaç dakika içinde o sürüme ekler.
