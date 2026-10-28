@@ -85,8 +85,11 @@ class NobetmatikPage(QWidget):
         self.teach = QTableWidget(0, 7)
         self.teach.setHorizontalHeaderLabels(["Nöbet tutar", "Öğretmen"] +
                                              ["Pzt", "Sal", "Çar", "Per", "Cum"])
-        U._stretch(self.teach, 1)
+        U._stretch(self.teach)
         hh = self.teach.horizontalHeader()
+        # Sabit genişlikli sütunlar: adlar tek hizada, alt alta düzgün durur
+        hh.setSectionResizeMode(1, QHeaderView.Fixed)
+        self.teach.setColumnWidth(1, 300)
         hh.setSectionResizeMode(0, QHeaderView.Fixed)
         self.teach.setColumnWidth(0, 110)
         for c in range(2, 7):
@@ -94,7 +97,8 @@ class NobetmatikPage(QWidget):
             self.teach.setColumnWidth(c, 70)
             self.teach.horizontalHeaderItem(c).setToolTip(f"{DAYS[c - 2]} günkü ders sayısı")
         hh.setDefaultAlignment(Qt.AlignCenter)
-        self.teach.setMaximumWidth(860)
+        self.teach.horizontalHeaderItem(1).setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.teach.setFixedWidth(110 + 300 + 5 * 70 + 24)
         self.teach_checks = []
         self.teach.verticalHeader().hide()
         self.teach.setSelectionMode(QAbstractItemView.NoSelection)
@@ -118,9 +122,9 @@ class NobetmatikPage(QWidget):
         v.addLayout(top)
         v.addWidget(self.teach_info)
         tc = QHBoxLayout()
-        tc.addStretch(1)
-        tc.addWidget(self.teach, 20)
-        tc.addStretch(1)
+        tc.addStretch()
+        tc.addWidget(self.teach)
+        tc.addStretch()
         v.addLayout(tc, 1)
         return p
 
@@ -389,7 +393,7 @@ class NobetmatikPage(QWidget):
             self.teach.setCellWidget(r, 0, cell)
             self.teach_checks.append(box)
             name = U._item(t)
-            name.setTextAlignment(Qt.AlignCenter)
+            name.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
             self.teach.setItem(r, 1, name)
             for d in range(5):
                 n = lesson_count(self.schedule, t, d)

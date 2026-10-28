@@ -1,4 +1,8 @@
-Sürüm 2.0.1
+Sürüm 2.0.2
+
+- Nöbetmatik öğretmen listesi: adlar tek hizada alt alta, sütunlar sabit genişlikte, tablo ekranın ortasında
+
+Sürüm 2.0.1'deki yenilikler
 
 - Nöbetmatik öğretmen listesinde öğretmen adları da ortalı
 
