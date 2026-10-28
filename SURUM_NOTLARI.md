@@ -1,4 +1,12 @@
-Sürüm 2.1.1
+Sürüm 2.1.2
+
+- Kayıtlar ekranı sadeleşti: solda günlerin listesi, sağda seçilen günün dersleri (saat, sınıf, ders, derse giren) ve Aç / Yazdır / Sil düğmeleri
+- Bütün tablolarda başlık ile altındaki yazı aynı hizada: adlar ve metinler sola, tarih / saat / sayılar ortaya hizalı
+- Nöbet çizelgesi görüntüleme ekranında uzun adlar artık kesilmez
+- Nöbetmatik "Düzenle ve kaydet" listesi düzenli ve daha hızlı; nöbet yeri sayıları ortalı
+- Ders programı ve nöbet çizelgesi listelerindeki gereksiz satır numaraları kaldırıldı
+
+Sürüm 2.1.1'deki yenilikler
 
 - Tema rengi, açık/koyu, köşe ve arka plan seçimleri artık anında uygulanır (yaklaşık 10 kat hızlı): yalnızca ekrandaki sayfa hemen boyanır, diğer sayfalar açılınca yenilenir
 - Sol menüde numaralar yerine simgeler: 🏫 Okul Bilgileri, 📚 Ders Programı, 🗓 Nöbet Çizelgesi, 📝 Görevlendirme, 📋 Kayıtlar, 📊 Aylık Rapor, ⚙ Ayarlar

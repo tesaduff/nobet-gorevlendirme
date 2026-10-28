@@ -186,7 +186,7 @@ QTableWidget, QListWidget#list {{
 }}
 QHeaderView::section {{
     background: {HEAD}; color: {MUTED}; border: none; border-bottom: 1px solid {BORDER};
-    padding: 7px 6px; font-weight: 600;
+    padding: 7px 3px; font-weight: 600;
 }}
 QTableCornerButton::section {{ background: {HEAD}; border: none; }}
 QListWidget#list::item {{ padding: 7px 8px; border-radius: 6px; }}

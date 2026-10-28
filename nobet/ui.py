@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QChe
                                QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog,
                                QLabel,
                                QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit,
-                               QProgressDialog, QPushButton, QSpinBox, QSplitter, QTableWidget,
+                               QProgressDialog, QPushButton, QSpinBox, QSplitter, QStyledItemDelegate, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import export, theme, updater
@@ -120,9 +120,10 @@ class ChoiceButton(QPushButton):
 
     currentTextChanged = Signal(str)
 
-    def __init__(self, items=()):
+    def __init__(self, items=(), data=None):
         super().__init__()
         self.items = list(items)
+        self.data = list(data) if data is not None else None
         self._text = self.items[0] if self.items else ""
         self.setCursor(Qt.PointingHandCursor)
         self.setObjectName("choice")
@@ -150,6 +151,11 @@ class ChoiceButton(QPushButton):
     def currentText(self):
         return self._text
 
+    def currentData(self):
+        if self.data is None or self._text not in self.items:
+            return None
+        return self.data[self.items.index(self._text)]
+
     def setCurrentText(self, text):
         if text == self._text:
             return
@@ -166,6 +172,34 @@ class ChoiceButton(QPushButton):
 
     def insertItem(self, index, text):
         self.items.insert(index, text)
+
+
+class _AlignDelegate(QStyledItemDelegate):
+    """Sütun hizası: metin sütunları sola, sayı/tarih sütunları ortaya; hepsi dikeyde ortalı."""
+
+    def __init__(self, parent, center):
+        super().__init__(parent)
+        self.center = set(center)
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        table = self.parent()
+        spanned = table.columnSpan(index.row(), index.column()) > 1  # öğretmen başlık satırı
+        option.displayAlignment = (Qt.AlignCenter if index.column() in self.center and not spanned
+                                   else Qt.AlignLeft | Qt.AlignVCenter)
+
+
+def align(table, *center):
+    """Tablonun başlıklarını ve hücrelerini aynı hizaya getirir (başlık, altındaki yazıyla
+    aynı yerden başlar). center: ortalanacak sütunlar."""
+    table.setItemDelegate(_AlignDelegate(table, center))
+    header = table.horizontalHeader()
+    header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    for c in range(table.columnCount()):
+        it = table.horizontalHeaderItem(c)
+        if it is not None:
+            it.setTextAlignment(Qt.AlignCenter if c in center else Qt.AlignLeft | Qt.AlignVCenter)
+    return table
 
 
 def run_dialog(dlg):
@@ -687,6 +721,7 @@ class DutyEditDialog(QDialog):
 
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Gün", "Tarih (isteğe bağlı)", "Öğretmen", "Nöbet yeri"])
+        align(self.table)
         _stretch(self.table, 2, 3)
         for e in sorted(entries, key=lambda e: (e.date or "", e.weekday, e.place, e.teacher)):
             self._add_row(e)
@@ -844,6 +879,7 @@ class DailyTab(QWidget):
         self.people = QTableWidget(0, 3)
         self.people.setHorizontalHeaderLabels(["O gün dersi olan öğretmenler", "Bugünkü dersleri",
                                                "Durum"])
+        align(self.people)
         _stretch(self.people, 0)
         self.people.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
         self.people.setColumnWidth(2, 200)
@@ -878,9 +914,11 @@ class DailyTab(QWidget):
         # ---------- Adım 2: boş kalan dersler ve nöbetçiler
         self.gaps = QTableWidget(0, 3)
         self.gaps.setHorizontalHeaderLabels(["Saat", "Sınıf", "Ders"])
+        align(self.gaps, 0, 1)
         self.dutyt = QTableWidget(0, 4)
         self.dutyt.setHorizontalHeaderLabels(["Nöbetçi öğretmen", "Boş saatleri", "Sıra",
                                               "Girdiği"])
+        align(self.dutyt, 2, 3)
         for c, tip in ((2, "Adalet sırası: 1 numara ilk görevlendirilecek kişidir (bu yıl en az "
                            "boş derse giren)"),
                        (3, "Bu eğitim yılında girdiği boş ders sayısı (onaylanmış "
@@ -928,7 +966,11 @@ class DailyTab(QWidget):
         # ---------- Adım 3: sonuç
         self.result = QTableWidget(0, 4)
         self.result.setHorizontalHeaderLabels(["Saat", "Sınıf", "Ders", "Derse girecek öğretmen"])
+        align(self.result, 0, 1)
         _stretch(self.result, 3)
+        for c, w in ((0, 80), (1, 70), (2, 200)):
+            self.result.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
+            self.result.setColumnWidth(c, w)
         self.result.setAlternatingRowColors(False)
         self.result.verticalHeader().hide()
         self.result.verticalHeader().setDefaultSectionSize(42)
@@ -1401,6 +1443,8 @@ class ScheduleTab(QWidget):
 
         self.versions = QTableWidget(0, 4)
         self.versions.setHorizontalHeaderLabels(["Geçerlilik", "Dosya", "Öğretmen", "Yüklenme"])
+        align(self.versions, 0, 2, 3)
+        self.versions.verticalHeader().hide()
         _stretch(self.versions, 1)
         self.versions.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.versions.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -1660,6 +1704,8 @@ class DutyTab(QWidget):
         self.win, self.db = win, win.db
         self.months = QTableWidget(0, 2)
         self.months.setHorizontalHeaderLabels(["Ay", "Öğretmen"])
+        align(self.months, 1)
+        self.months.verticalHeader().hide()
         _stretch(self.months, 0)
         self.months.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.months.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -1920,7 +1966,7 @@ class DutyTab(QWidget):
 
 
 class RecordsTab(QWidget):
-    """Onaylanmış görevlendirmelerin gün gün listesi: açma, yazdırma, silme."""
+    """Onaylanmış görevlendirmeler: solda günler, sağda seçilen günün ayrıntısı."""
 
     def __init__(self, win):
         super().__init__()
@@ -1929,22 +1975,58 @@ class RecordsTab(QWidget):
         self.month.changed.connect(self.refresh)
         self.all_year = QCheckBox("Bütün eğitim yılı")
         self.all_year.toggled.connect(self.refresh)
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Tarih", "Gün", "Gelmeyen öğretmen (durum)",
-                                              "Ders", "Derse girenler"])
-        _stretch(self.table, 2, 4)
+
+        # Sol: günler (sade)
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Tarih", "Gelmeyen öğretmen", "Ders"])
+        _stretch(self.table, 1)
+        align(self.table, 0, 2)
+        for c, w in ((0, 120), (2, 56)):
+            self.table.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
+            self.table.setColumnWidth(c, w)
         self.table.verticalHeader().hide()
+        self.table.setShowGrid(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setWordWrap(True)
+        self.table.itemSelectionChanged.connect(self._show_detail)
         self.table.doubleClicked.connect(lambda _i: self.open_day())
+        left = QGroupBox("Günler")
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(12, 18, 12, 12)
+        ll.addWidget(self.table)
+
+        # Sağ: seçilen günün dersleri
+        self.detail = QTableWidget(0, 4)
+        self.detail.setHorizontalHeaderLabels(["Saat", "Sınıf", "Ders", "Derse giren"])
+        _stretch(self.detail, 3)
+        align(self.detail, 0, 1)
+        for c, w in ((0, 70), (1, 64), (2, 150)):
+            self.detail.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
+            self.detail.setColumnWidth(c, w)
+        self.detail.verticalHeader().hide()
+        self.detail.setShowGrid(False)
+        self.detail.setSelectionMode(QAbstractItemView.NoSelection)
+        self.detail.setFocusPolicy(Qt.NoFocus)
+        self.detail.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.detail_box = QGroupBox("Seçili gün")
+        dl = QVBoxLayout(self.detail_box)
+        dl.setContentsMargins(12, 18, 12, 12)
+        dl.addWidget(self.detail)
         open_b = variant(QPushButton("📂  Aç / değiştir"), "primary")
         open_b.clicked.connect(self.open_day)
         prt = QPushButton("🖨  Yazdır / PDF")
         prt.clicked.connect(lambda: self.open_day(print_it=True))
-        rem = variant(QPushButton("🗑  Seçili günü sil"), "danger")
+        rem = variant(QPushButton("🗑  Bu günü sil"), "danger")
         rem.clicked.connect(self.delete_day)
+        db_ = QHBoxLayout()
+        db_.addWidget(open_b)
+        db_.addWidget(prt)
+        db_.addStretch()
+        db_.addWidget(rem)
+        dl.addLayout(db_)
+
         rem_all = variant(QPushButton("Listedeki bütün kayıtları sil…"), "danger")
         rem_all.clicked.connect(self.delete_all)
         self.info = QLabel()
@@ -1953,14 +2035,14 @@ class RecordsTab(QWidget):
         top = QHBoxLayout()
         top.addWidget(QLabel("<b>Ay:</b>"))
         top.addWidget(self.month)
+        top.addSpacing(12)
         top.addWidget(self.all_year)
         top.addStretch()
-        foot = QHBoxLayout()
-        for b in (open_b, prt):
-            foot.addWidget(b)
-        foot.addStretch()
-        foot.addWidget(rem)
-        foot.addWidget(rem_all)
+        top.addWidget(rem_all)
+        body = QHBoxLayout()
+        body.setSpacing(14)
+        body.addWidget(left, 4)
+        body.addWidget(self.detail_box, 5)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(page_header("📋  Görevlendirme Kayıtları",
@@ -1968,9 +2050,9 @@ class RecordsTab(QWidget):
                                 "silerseniz istatistiklerden de silinir."))
         v.addLayout(top)
         v.addWidget(self.info)
-        v.addWidget(self.table, 1)
-        v.addLayout(foot)
+        v.addLayout(body, 1)
         self.dates = []
+        self.days = []
 
     def _range(self):
         if self.all_year.isChecked():
@@ -1980,31 +2062,69 @@ class RecordsTab(QWidget):
         return m + "-01", m + "-31"
 
     def refresh(self):
-        self.month.setEnabled(True)
-        days = self.db.saved_days(*self._range())
-        self.dates = [d for d, _a, _r in days]
-        self.table.setRowCount(len(days))
+        self.days = self.db.saved_days(*self._range())
+        self.dates = [d for d, _a, _r in self.days]
+        self.table.setRowCount(len(self.days))
         lessons = 0
-        for r, (date, absent, rows) in enumerate(days):
+        for r, (date, absent, rows) in enumerate(self.days):
             d = dt.date.fromisoformat(date)
             lessons += len(rows)
-            who = sorted({x[3] for x in rows if x[3]}, key=normalize)
-            missing = sum(1 for x in rows if not x[3])
-            cells = [d.strftime("%d.%m.%Y"), DAYS[d.weekday()] if d.weekday() < 5 else "",
-                     ", ".join(f"{t} ({why})" for t, why in sorted(absent.items())),
-                     len(rows),
-                     ", ".join(who) + (f"  · {missing} ders atanamadı" if missing else "")]
+            day = DAYS[d.weekday()] if d.weekday() < 5 else ""
+            cells = [f"{d.strftime('%d.%m.%Y')}\n{day}",
+                     "\n".join(f"{t}  ({why})" for t, why in sorted(absent.items())),
+                     len(rows)]
             for c, val in enumerate(cells):
-                it = _item(val)
-                if c in (0, 1, 3):
-                    it.setTextAlignment(Qt.AlignCenter)
-                self.table.setItem(r, c, it)
+                self.table.setItem(r, c, _item(val))
         self.table.resizeRowsToContents()
+        for r in range(self.table.rowCount()):
+            self.table.setRowHeight(r, self.table.rowHeight(r) + 12)
         period = (f"{self._range()[0][:4]}–{int(self._range()[0][:4]) + 1} eğitim yılı"
                   if self.all_year.isChecked() else export.month_tr(self.month.key()))
-        self.info.setText(f"{period}: <b>{len(days)}</b> gün, <b>{lessons}</b> boş ders "
-                          "görevlendirmesi kayıtlı. Açmak için satıra çift tıklayın."
-                          if days else f"{period} için onaylanmış görevlendirme yok.")
+        self.info.setText(f"{period}: <b>{len(self.days)}</b> gün, <b>{lessons}</b> boş ders "
+                          "görevlendirmesi kayıtlı. Ayrıntısını görmek için soldan bir gün seçin."
+                          if self.days else f"{period} için onaylanmış görevlendirme yok.")
+        if self.days:
+            self.table.selectRow(0)
+        self._show_detail()
+
+    def _show_detail(self):
+        r = self.table.currentRow()
+        self.detail.clearSpans()
+        self.detail.setRowCount(0)
+        if r < 0 or r >= len(self.days):
+            self.detail_box.setTitle("Seçili gün")
+            self.detail_box.setEnabled(False)
+            return
+        self.detail_box.setEnabled(True)
+        date, absent, rows = self.days[r]
+        d = dt.date.fromisoformat(date)
+        self.detail_box.setTitle(f"{d.strftime('%d.%m.%Y')} {DAYS[d.weekday()]} — "
+                                 f"{len(rows)} ders")
+        by_absent = {}
+        for hour, who, info, assigned, kind, note in rows:
+            by_absent.setdefault(who, []).append((hour, info, assigned, kind))
+        for who in sorted(by_absent, key=normalize):
+            i = self.detail.rowCount()
+            self.detail.insertRow(i)
+            head = _item(f"{who}  ·  {absent.get(who, '')}")
+            f = head.font()
+            f.setBold(True)
+            head.setFont(f)
+            head.setBackground(BLUE)
+            self.detail.setItem(i, 0, head)
+            self.detail.setSpan(i, 0, 1, 4)
+            for hour, info, assigned, kind in sorted(by_absent[who]):
+                sinif, ders = split_info(info or "")
+                i = self.detail.rowCount()
+                self.detail.insertRow(i)
+                giren = _item(assigned or "— atanamadı —")
+                if not assigned:
+                    giren.setBackground(RED)
+                elif kind != "nobetci":
+                    giren.setBackground(YELLOW)
+                for c, val in enumerate((f"{hour}. ders", sinif or "—", ders or "—")):
+                    self.detail.setItem(i, c, _item(val))
+                self.detail.setItem(i, 3, giren)
 
     def _selected(self):
         r = self.table.currentRow()
@@ -2085,6 +2205,7 @@ class ReportTab(QWidget):
         cl.addWidget(self.verdict_text)
         self.table = QTableWidget(0, len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
+        align(self.table, 1, 2, 3, 4, 5)
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.Stretch)
         for c in range(1, 6):
@@ -2241,6 +2362,7 @@ class AdminsDialog(QDialog):
                        key=lambda t: (t != principal, t not in vices, t not in chosen, normalize(t)))
         self.table = QTableWidget(len(names), 2)
         self.table.setHorizontalHeaderLabels(["Öğretmen", "Görevi"])
+        align(self.table)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.table.setColumnWidth(1, 200)

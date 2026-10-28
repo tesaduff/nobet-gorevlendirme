@@ -97,7 +97,7 @@ class NobetmatikPage(QWidget):
             self.teach.setColumnWidth(c, 70)
             self.teach.horizontalHeaderItem(c).setToolTip(f"{DAYS[c - 2]} günkü ders sayısı")
         hh.setDefaultAlignment(Qt.AlignCenter)
-        self.teach.horizontalHeaderItem(1).setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        U.align(self.teach, 0, 2, 3, 4, 5, 6)
         self.teach.setFixedWidth(110 + 300 + 5 * 70 + 24)
         self.teach_checks = []
         self.teach.verticalHeader().hide()
@@ -136,6 +136,7 @@ class NobetmatikPage(QWidget):
     def _page_places(self):
         self.places = QTableWidget(0, 2)
         self.places.setHorizontalHeaderLabels(["Nöbet yeri", "Her gün kaç nöbetçi?"])
+        U.align(self.places)
         U._stretch(self.places, 0)
         self.places.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.places.setColumnWidth(1, 190)
@@ -286,6 +287,7 @@ class NobetmatikPage(QWidget):
 
         self.rules_t = QTableWidget(0, 2)
         self.rules_t.setHorizontalHeaderLabels(["Kural", "Açıklama"])
+        U.align(self.rules_t)
         U._stretch(self.rules_t, 1)
         self.rules_t.verticalHeader().hide()
         self.rules_t.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -446,6 +448,7 @@ class NobetmatikPage(QWidget):
         sp = QSpinBox()
         sp.setRange(1, 20)
         sp.setValue(int(count) or 1)
+        sp.setAlignment(Qt.AlignCenter)
         sp.valueChanged.connect(self._update_capacity)
         self.places.setCellWidget(r, 1, sp)
         self._update_capacity()
@@ -577,7 +580,12 @@ class NobetmatikPage(QWidget):
         self.edit_t = QTableWidget(0, 4)
         self.edit_t.setHorizontalHeaderLabels(["Öğretmen", "Nöbet günü", "O gün dersi",
                                                "Not"])
-        U._stretch(self.edit_t, 0)
+        U._stretch(self.edit_t, 3)
+        U.align(self.edit_t, 2)
+        for c, w in ((0, 280), (1, 190), (2, 110)):
+            self.edit_t.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
+            self.edit_t.setColumnWidth(c, w)
+        self.edit_t.setMaximumWidth(960)
         self.edit_t.verticalHeader().hide()
         self.edit_t.setSelectionMode(QAbstractItemView.NoSelection)
         self.edit_t.setMinimumHeight(120)
@@ -595,7 +603,11 @@ class NobetmatikPage(QWidget):
         v = QVBoxLayout(p)
         v.setContentsMargins(0, 0, 0, 0)
         v.addLayout(h)
-        v.addWidget(self.edit_t, 1)
+        ec = QHBoxLayout()
+        ec.addStretch(1)
+        ec.addWidget(self.edit_t, 30)
+        ec.addStretch(1)
+        v.addLayout(ec, 1)
         v.addWidget(self.edit_info)
         return p
 
@@ -608,12 +620,9 @@ class NobetmatikPage(QWidget):
         self.edit_t.setRowCount(len(teachers))
         for r, t in enumerate(teachers):
             self.edit_t.setItem(r, 0, U._item(t))
-            combo = QComboBox()
-            combo.addItem("— nöbet yok —", None)
-            for d, name in enumerate(DAYS):
-                combo.addItem(name, d)
-            combo.setCurrentIndex(day_of[t] + 1 if t in day_of else 0)
-            combo.currentIndexChanged.connect(lambda _i, who=t, cb=combo: self._move(who, cb))
+            combo = U.ChoiceButton(["— nöbet yok —"] + DAYS, [None] + list(range(5)))
+            combo.setCurrentText(DAYS[day_of[t]] if t in day_of else "— nöbet yok —")
+            combo.currentTextChanged.connect(lambda _t, who=t, cb=combo: self._move(who, cb))
             self.edit_t.setCellWidget(r, 1, combo)
             d = day_of.get(t)
             self.edit_t.setItem(r, 2, U._item(f"{lesson_count(self.schedule, t, d)} ders"
