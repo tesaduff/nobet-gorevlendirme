@@ -442,9 +442,7 @@ class SchoolTab(QWidget):
             e.setText(self.db.get_setting(key, ""))
         self.new_logo, self.remove_logo = None, False
         self._show_logo(logo_path() if os.path.exists(logo_path()) else None)
-        roles = admin_roles_text(self.db)
         self.admins_note.setText(
-            ("<b>İdareciler:</b> " + roles + "<br>" if roles else "") +
             "Okul müdürü ve müdür yardımcıları, ders programı yüklendikten sonra "
             "<b>1 Ders Programı</b> sayfasının altındaki <b>İdareciler</b> bölümünden listeden "
             "seçilir. Çıktılardaki imza yerlerine bu seçim yazılır.")

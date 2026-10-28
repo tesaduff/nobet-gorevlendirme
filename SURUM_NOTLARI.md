@@ -1,4 +1,8 @@
-Sürüm 2.0.3
+Sürüm 2.0.4
+
+- Okul Bilgileri sayfasında idareci adları yazmaz, yalnızca nereden seçileceği açıklanır
+
+Sürüm 2.0.3'teki yenilikler
 
 - Okul Bilgileri sayfasında yalnızca okul adı, il/ilçe ve logo var; idareciler buradan elle yazılmaz
 - İdareciler, ders programı yüklendikten sonra Ders Programı sayfasının altındaki İdareciler bölümünden listeden seçilir: Okul Müdürü / Müdür Yardımcısı / Diğer idareci. Program ilk yüklendiğinde bu pencere kendiliğinden açılır
