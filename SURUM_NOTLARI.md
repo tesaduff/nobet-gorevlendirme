@@ -1,4 +1,9 @@
-Sürüm 1.8.0 — adalet
+Sürüm 1.8.1
+
+- Nöbet çizelgesi sayfasının başında üç seçenek: "Nöbetmatik ile oluştur", "Hazır çizelgem var (PDF / Excel yükle)", "Elle gir / düzenle"
+- Elle giriş geri geldi: çizelgeyi kendiniz yazabilir veya yüklü çizelgeyi düzeltebilirsiniz
+
+Sürüm 1.8.0'daki yenilikler (adalet)
 
 Görevlendirme daha adil:
 - Aynı gün içinde verilen dersler anında sayılır; bir nöbetçiye aynı gün üst üste yığılmaz

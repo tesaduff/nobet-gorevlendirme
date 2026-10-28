@@ -1342,10 +1342,16 @@ class DutyTab(QWidget):
         self.months.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.months.setSelectionMode(QAbstractItemView.SingleSelection)
         self.months.itemSelectionChanged.connect(self._show)
-        auto = variant(QPushButton("⚙  Nöbetmatik ile yeni çizelge oluştur"), "primary")
+        # Üç yol: Nöbetmatik ile oluştur / hazır çizelgeyi yükle / elle gir
+        auto = variant(QPushButton("⚙  Nöbetmatik ile oluştur\n"
+                                   "     Program adil dağıtsın"), "step")
         auto.clicked.connect(lambda: self.open_nobetmatik())
-        load = QPushButton("📄  PDF / Excel'den yükle")
+        load = variant(QPushButton("📄  Hazır çizelgem var\n"
+                                   "     PDF / Excel yükle"), "step")
         load.clicked.connect(self.load_file)
+        manual = variant(QPushButton("✏  Elle gir / düzenle\n"
+                                     "     Kendiniz yazın"), "step")
+        manual.clicked.connect(self.edit)
         prt = QPushButton("🖨  Yazdır")
         prt.clicked.connect(self.print_month)
         rem = variant(QPushButton("Seçili ayı sil"), "danger")
@@ -1362,27 +1368,29 @@ class DutyTab(QWidget):
         # Kademe 1: yüklü aylar
         view = QPushButton("👁  Görüntüle")
         view.clicked.connect(self.open_view)
-        for b in (auto, load, view, prt, rem):
-            b.setMinimumHeight(46)
-        auto.setStyleSheet("font-size:11pt")
-        self.months.setMinimumHeight(130)
+        for b in (view, prt, rem):
+            b.setMinimumHeight(40)
+        self.months.setMinimumHeight(110)
+        choose = QGroupBox("Bu ayın nöbet çizelgesini nasıl hazırlamak istersiniz?")
+        ch = QHBoxLayout(choose)
+        for b in (auto, load, manual):
+            b.setMinimumHeight(64)
+            ch.addWidget(b, 1)
         card1 = QGroupBox("Yüklü nöbet çizelgeleri")
         c1 = QVBoxLayout(card1)
-        hint = QLabel("Her ay <b>Nöbetmatik</b> ile o ayın çizelgesini oluşturun (ya da hazır "
-                      "çizelgeyi PDF/Excel'den yükleyin). Görevlendirme bu çizelgeyi kullanır.")
-        hint.setWordWrap(True)
-        c1.addWidget(hint)
-        c1.addWidget(auto)
         bh = QHBoxLayout()
-        bh.addWidget(load, 1)
         bh.addWidget(view, 1)
         bh.addWidget(prt, 1)
         bh.addWidget(rem)
         c1.addLayout(bh)
         c1.addWidget(self.months, 1)
+        hint = QLabel("Görevlendirme, seçilen tarihin ayına ait çizelgeyi kullanır.")
+        hint.setObjectName("subtitle")
+        c1.addWidget(hint)
         p1 = QWidget()
         v1 = QVBoxLayout(p1)
         v1.setContentsMargins(0, 0, 0, 0)
+        v1.addWidget(choose)
         v1.addWidget(card1, 1)
 
         # Kademe 2: haftalık nöbetçiler (tam sayfa)
@@ -1527,6 +1535,21 @@ class DutyTab(QWidget):
             QApplication.restoreOverrideCursor()
         month = _guess_month(res.entries)
         dlg = DutyEditDialog(self, res.entries, teachers, month, res.unmatched, res.warnings)
+        if dlg.exec() == QDialog.Accepted:
+            self._save(dlg)
+
+    def edit(self):
+        """Elle giriş: seçili ayın çizelgesini (yoksa boş bir çizelgeyi) düzenler."""
+        teachers = self._teachers()
+        if not teachers:
+            _info(self, "Önce 1. adımda ders programını yükleyin.")
+            return
+        m = self.month() or dt.date.today().strftime("%Y-%m")
+        entries = [DutyEntry(wd, t, p, d) for wd, d, t, p in self.db.duty_rows(m)]
+        if not entries:
+            entries = [DutyEntry(0, "", "")]
+        dlg = DutyEditDialog(self, entries, teachers, m)
+        dlg.setWindowTitle("Nöbet çizelgesi — elle giriş / düzenleme")
         if dlg.exec() == QDialog.Accepted:
             self._save(dlg)
 
@@ -2046,8 +2069,9 @@ class MainWindow(QMainWindow):
         """Bir adım bitince kullanıcıyı sıradaki adıma götürür."""
         self.ask_admins()
         if not self.db.duty_months():
-            _info(self, f"✅ {done}\n\nSıradaki adım: 2 — Bu ayın nöbet çizelgesini yükleyin.",
-                  "Sonraki adım")
+            _info(self, f"✅ {done}\n\nSıradaki adım: 2 — Nöbet çizelgesi.\n\n"
+                        "• Nöbetmatik ile oluşturabilir,\n• hazır çizelgenizi PDF/Excel olarak "
+                        "yükleyebilir,\n• ya da elle girebilirsiniz.", "Sonraki adım")
             self.tabs.setCurrentWidget(self.duty)
         else:
             self.statusBar().showMessage(f"✅ {done} Artık görevlendirme yapabilirsiniz.", 8000)
