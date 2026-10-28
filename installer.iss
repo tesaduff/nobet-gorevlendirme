@@ -52,3 +52,28 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"
 [Run]
 ; Kurulum (ve sessiz güncelleme) bitince program kendiliğinden açılır
 Filename: "{app}\{#MyAppExe}"; Flags: nowait
+
+[Code]
+// Kaldırırken verilerin de silinip silinmeyeceğini sorar. Evet denirse program aynı
+// bilgisayara yeniden kurulduğunda sıfırdan başlar.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir, ExcelDir: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    DataDir := ExpandConstant('{userappdata}\NobetGorevlendirme');
+    ExcelDir := ExpandConstant('{userdocs}\Nöbet Görevlendirme');
+    if (not UninstallSilent) and DirExists(DataDir) then
+      if MsgBox('Programın verileri de silinsin mi?' + #13#10 + #13#10 +
+                'Ders programı, nöbet çizelgeleri, görevlendirme kayıtları, okul bilgileri ve ' +
+                'Excel kayıt dosyası silinir. Program yeniden kurulursa sıfırdan başlar.' +
+                #13#10 + #13#10 + 'Verileri saklamak istiyorsanız Hayır deyin.',
+                mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
+        DelTree(DataDir, True, True, True);
+        if DirExists(ExcelDir) then
+          DelTree(ExcelDir, True, True, True);
+      end;
+  end;
+end;

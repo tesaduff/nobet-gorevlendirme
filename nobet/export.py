@@ -51,7 +51,8 @@ def day_html(plan, info=None, has_logo=False):
     head = "<br>".join(x for x in ("T.C.", e(city), f"<b>{e(school)}</b>") if x)
     sign = []
     for title, key in (("Müdür Yardımcısı", "vice_principal"), ("Okul Müdürü", "principal")):
-        sign.append(f"<td align=center width=40%>{e(info.get(key, '')) or '&nbsp;'}<br>"
+        name = (info.get(key, "") or "").replace(";", ",").split(",")[0].strip()
+        sign.append(f"<td align=center width=40%>{e(name) or '&nbsp;'}<br>"
                     f"<b>{title}</b><br><br>İmza</td>")
     return f"""
 <html><body style="font-family:'Segoe UI', Arial; font-size:9pt; color:#111">

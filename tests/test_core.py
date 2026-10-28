@@ -409,7 +409,11 @@ def test_admins_never_assigned_and_split_blocks(tmp_path):
     plan = plan_day("2026-11-02", sched, [("IDARECI", "N.İDARECİ")], {"A": "R"}, {}, {},
                     excluded={"IDARECI"})
     assert plan.assignments[0].assigned == "B" and plan.assignments[0].kind == "bos"
-    assert all(t != "IDARECI" for t, _ in plan.assignments[0].options)
+    only_admin = plan_day("2026-11-02", {"A": {(0, 1): "9A"}, "IDARECI": {(0, 2): "x"}}, [],
+                          {"A": "R"}, {}, {}, excluded={"IDARECI"})
+    assert only_admin.assignments[0].assigned is None
+    # İdareci otomatik seçilmez ama elle seçim listesinde "idareci" etiketiyle yer alır
+    assert ("IDARECI", "idareci") in plan.assignments[0].options
     from nobet.parse_duty import DutyEntry
     db = Database(str(tmp_path / "t.db"))
     db.save_duty("2026-10", [DutyEntry(0, "IDARECI", "N.İDARECİ"), DutyEntry(0, "N", "Bahçe")])

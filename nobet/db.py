@@ -263,13 +263,22 @@ class Database:
                 if is_admin_place(p or "")}
         extra = set(json.loads(self.get_setting("admins_extra", "[]")))
         removed = set(json.loads(self.get_setting("admins_removed", "[]")))
-        return (auto | extra) - removed
+        return (auto | self._school_admins() | extra) - removed
+
+    def _school_admins(self):
+        """Okul bilgilerinde yazılı müdür ve müdür yardımcıları (programdaki adlarıyla)."""
+        import re
+        from .names import NameMatcher
+        raw = [self.get_setting("principal", "")] + \
+            re.split(r"[,;\n]", self.get_setting("vice_principal", ""))
+        matcher = NameMatcher(self.all_teachers())
+        return {m for m in (matcher.match(n) for n in raw if n.strip()) if m}
 
     def set_admins(self, names):
         import json
         from .parse_duty import is_admin_place
         auto = {t for t, p in self.conn.execute("SELECT DISTINCT teacher, place FROM duty_entries")
-                if is_admin_place(p or "")}
+                if is_admin_place(p or "")} | self._school_admins()
         names = set(names)
         self.set_setting("admins_extra", json.dumps(sorted(names - auto), ensure_ascii=False))
         self.set_setting("admins_removed", json.dumps(sorted(auto - names), ensure_ascii=False))
@@ -279,6 +288,6 @@ class Database:
         for table in ("schedule_entries", "schedule_versions", "duty_entries", "absences",
                       "assignments"):
             self.conn.execute(f"DELETE FROM {table}")
-        for key in ("admins_extra", "admins_removed"):
+        for key in ("admins_extra", "admins_removed", "admins_confirmed"):
             self.conn.execute("DELETE FROM settings WHERE key=?", (key,))
         self.conn.commit()

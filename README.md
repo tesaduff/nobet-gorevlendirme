@@ -8,8 +8,11 @@ nöbetçi öğretmenleri **adil** şekilde otomatik atayan Windows programı.
 1. [Releases](https://github.com/tesaduff/nobet-gorevlendirme/releases/latest) sayfasından
    **`NobetGorevlendirme-Kurulum.exe`** dosyasını indirin ve çift tıklayın.
 2. Windows "bilinmeyen yayımcı" uyarısı verirse **Ek bilgi → Yine de çalıştır** seçin.
-3. Kurulum sihirbazında **İleri → Kur → Son** deyin. Yönetici izni gerekmez. Program Başlat
-   menüsüne ve masaüstüne eklenir.
+3. Kurulum soru sormadan biter, masaüstüne **Nöbetçi Öğretmen Görevlendirme** kısayolu eklenir
+   ve program açılır. Yönetici izni gerekmez.
+
+Programı kaldırırken (Ayarlar → Uygulamalar) verilerin de silinip silinmeyeceği sorulur. Başka
+bir okula/bilgisayara kurulan program her zaman boş başlar.
 
 Kurmadan kullanmak isterseniz aynı sayfadaki taşınabilir `NobetGorevlendirme.exe` dosyasını
 Masaüstü gibi bir klasöre koyup çalıştırın.

@@ -46,7 +46,8 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
     total_counts: {öğretmen: tüm zamanlar toplamı} — bu gün hariç
     max_per_day: bir nöbetçiye günde en fazla kaç ders verileceği (0 = sınırsız). Sınıra
         ulaşan nöbetçinin yerine boş öğretmen aranır; kimse yoksa yine nöbetçiye verilir.
-    excluded: hiçbir zaman derse görevlendirilmeyecekler (ör. idareciler).
+    excluded: otomatik görevlendirilmeyecekler (ör. idareciler). Bunlar yalnızca elle seçim
+        listesinde "idareci" etiketiyle yer alır.
     """
     excluded = set(excluded)
     weekday = dt.date.fromisoformat(date).weekday()
@@ -83,9 +84,13 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         free_duty = [t for t in duty_names if t not in absences and h not in busy.get(t, set())]
         free_other = [t for t in teaching if t not in absences and t not in duty_names
                       and t not in excluded and h not in busy.get(t, set())]
+        free_admins = [t for t in sorted(excluded) if t not in absences
+                       and (t in teaching or t in {d for d, _ in duty})
+                       and h not in busy.get(t, set())]
         a.options = ([(t, "nöbetçi") for t in sorted(free_duty, key=fairness)] +
                      [(t, "pencere" if window(t, h) else "boş saat")
-                      for t in sorted(free_other, key=lambda t: (not window(t, h), fairness(t)))])
+                      for t in sorted(free_other, key=lambda t: (not window(t, h), fairness(t)))] +
+                     [(t, "idareci") for t in free_admins])
         under_cap = [t for t in free_duty if not max_per_day or today.get(t, 0) < max_per_day]
         if under_cap:
             pick = min(under_cap, key=fairness)
