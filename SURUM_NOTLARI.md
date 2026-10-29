@@ -1,4 +1,8 @@
-Sürüm 2.3.1
+Sürüm 2.3.2
+
+- Joker öğretmen ekleme penceresi yenilendi: önce öğretmen listesine bakıp işaretlersiniz (arama kutusu var, kimin bugün dersi olmadığı yazar). Listede yoksa aynı pencerenin altındaki alana adını soyadını yazıp "Listeye ekle" dersiniz. Sonra "İşaretlileri joker yap"; eklenenler bildirilir
+
+Sürüm 2.3.1'deki yenilikler
 
 - "Joker öğretmen ekle" düğmesi ayrı bir pencere açar: öğretmenin adı soyadı sorulur (okul listesinde olmasa da olur), Ekle deyince "listeye eklendi" diye bildirilir
 - Gelmeyen öğretmeni seçtiğiniz ekranda ders saati kutucuklarının altında "dolu" (dersi var) / "boş" yazar

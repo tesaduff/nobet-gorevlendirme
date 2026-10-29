@@ -1526,56 +1526,115 @@ class DailyTab(QWidget):
                                  f"{f' ({len(jokers)})' if jokers else ''}</b>")
 
     def _add_joker(self):
-        """Joker öğretmen ekleme penceresi: adı soyadı sorulur, eklenince bildirilir."""
+        """Joker seçme penceresi: önce listeden seçilir; listede yoksa yeni ad yazılıp eklenir."""
+        date = self.date_iso()
+        wd = self.date.date().dayOfWeek() - 1
+        duty = {t for t, _ in self.duty}
+        jokers = self.db.jokers(date)
+        absent = self.absences()
+        busy_today = set(teachers_with_lessons(self.schedule, wd))
+        names = sorted((t for t in self.db.all_teachers()
+                        if t not in duty and t not in jokers and t not in absent
+                        and t not in self.admins),
+                       key=lambda t: (t in busy_today, normalize(t)))
+
         dlg = QDialog(self)
         dlg.setWindowTitle("Joker öğretmen ekle")
-        dlg.resize(460, 220)
-        edit = QLineEdit()
-        edit.setPlaceholderText("Ör. Ayşe Yılmaz")
-        edit.setMinimumHeight(38)
-        duty = {t for t, _ in self.duty}
-        jokers = self.db.jokers(self.date_iso())
-        names = sorted((t for t in self.db.all_teachers()
-                        if t not in duty and t not in jokers and t not in self.absences()),
-                       key=normalize)
-        comp = QCompleter(names, dlg)
-        comp.setCaseSensitivity(Qt.CaseInsensitive)
-        comp.setFilterMode(Qt.MatchContains)
-        edit.setCompleter(comp)
+        dlg.resize(520, 600)
+        search = QLineEdit()
+        search.setPlaceholderText("🔍  Listede ara…")
+        search.setMinimumHeight(36)
+        lst = QListWidget()
+        lst.setObjectName("list")
+
+        def add_row(t, checked=False, new=False):
+            note = ("  — yeni eklendi" if new else
+                    "  — bugün dersi yok" if t not in busy_today else
+                    f"  — bugün {len(self._lessons_today(t))} dersi var")
+            it = QListWidgetItem(t + note)
+            it.setData(Qt.UserRole, t)
+            # İşaret, satırın herhangi bir yerine tıklanınca değişir (kutu dahil, tek tıkla)
+            it.setFlags(it.flags() & ~Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+            return it
+
+        for t in names:
+            lst.addItem(add_row(t))
+        lst.itemClicked.connect(lambda it: it.setCheckState(
+            Qt.Unchecked if it.checkState() == Qt.Checked else Qt.Checked))
+
+        def filt(text):
+            key = normalize(text)
+            for i in range(lst.count()):
+                lst.item(i).setHidden(bool(key) and key not in normalize(lst.item(i).text()))
+        search.textChanged.connect(filt)
+
+        # Listede yoksa: yeni ad ekleme alanı
+        new_name = QLineEdit()
+        new_name.setPlaceholderText("Adı soyadı (ör. Ayşe Yılmaz)")
+        new_name.setMinimumHeight(36)
+        new_btn = QPushButton("＋  Listeye ekle")
+        new_btn.setMinimumHeight(36)
+        new_msg = QLabel()
+        new_msg.setObjectName("okMsg")
+
+        def add_new():
+            name = clean_name(new_name.text())
+            if not name:
+                new_msg.setText("<span style='color:#b45309'>Önce adı soyadı yazın.</span>")
+                return
+            for i in range(lst.count()):
+                if normalize(lst.item(i).data(Qt.UserRole)) == normalize(name):
+                    lst.item(i).setCheckState(Qt.Checked)
+                    lst.scrollToItem(lst.item(i))
+                    new_msg.setText(f"ℹ {name} zaten listede, işaretlendi.")
+                    new_name.clear()
+                    return
+            it = add_row(name, checked=True, new=True)
+            lst.insertItem(0, it)
+            lst.scrollToItem(it)
+            search.clear()
+            new_name.clear()
+            new_msg.setText(f"✅ {name} listeye eklendi ve işaretlendi.")
+        new_btn.clicked.connect(add_new)
+        new_name.returnPressed.connect(add_new)
+
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.button(QDialogButtonBox.Ok).setText("Ekle")
+        bb.button(QDialogButtonBox.Ok).setText("İşaretlileri joker yap")
         variant(bb.button(QDialogButtonBox.Ok), "primary")
         bb.button(QDialogButtonBox.Cancel).setText("Vazgeç")
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)
+        newbox = QGroupBox("Listede yok mu? Buradan ekleyin")
+        nb = QVBoxLayout(newbox)
+        nb.setContentsMargins(12, 18, 12, 10)
+        nr = QHBoxLayout()
+        nr.addWidget(new_name, 1)
+        nr.addWidget(new_btn)
+        nb.addLayout(nr)
+        nb.addWidget(new_msg)
         v = QVBoxLayout(dlg)
         v.addWidget(page_header("🃏  Joker öğretmen ekle",
-                                "Okuldaki listede olmasa da olur. Nöbetçi kalmazsa önce joker "
-                                "öğretmenler görevlendirilir."))
-        v.addWidget(QLabel("<b>Öğretmenin adı soyadı:</b>"))
-        v.addWidget(edit)
-        v.addStretch()
+                                "1) Önce listeden bakın ve işaretleyin. 2) Listede yoksa aşağıya "
+                                "adını yazıp ekleyin."))
+        v.addWidget(search)
+        v.addWidget(lst, 1)
+        v.addWidget(newbox)
         v.addWidget(bb)
-        edit.setFocus()
+        search.setFocus()
         if not run_dialog(dlg):
             return
-        name = clean_name(edit.text())
-        if not name:
-            _info(self, "Öğretmenin adını soyadını yazın.", "Joker öğretmen")
+        picked = [lst.item(i).data(Qt.UserRole) for i in range(lst.count())
+                  if lst.item(i).checkState() == Qt.Checked]
+        if not picked:
+            _info(self, "Hiç öğretmen işaretlenmedi.", "Joker öğretmen")
             return
-        name = NameMatcher(self.db.all_teachers()).match(name) or name
-        if name in self.absences():
-            _info(self, f"{name} bugün gelmeyenler arasında; joker olarak eklenemez.",
-                  "Joker öğretmen")
-            return
-        if name in jokers:
-            _info(self, f"{name} zaten joker öğretmen listesinde.", "Joker öğretmen")
-            return
-        self.db.set_jokers(self.date_iso(), jokers + [name])
+        self.db.set_jokers(date, jokers + [t for t in picked if t not in jokers])
         self.plan = None
         self._fill_jokers()
-        self.joker_msg.setText(f"✅ <b>{name}</b> listeye eklendi.")
-        _info(self, f"✅ {name} joker öğretmen listesine eklendi.", "Joker öğretmen")
+        self.joker_msg.setText(f"✅ {len(picked)} joker öğretmen listeye eklendi.")
+        _info(self, "✅ Joker öğretmen listesine eklendi:\n\n• " + "\n• ".join(picked),
+              "Joker öğretmen")
 
     def _remove_joker(self, who):
         self.db.set_jokers(self.date_iso(), [t for t in self.db.jokers(self.date_iso())
