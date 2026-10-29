@@ -38,6 +38,7 @@ _ROWS = {False: ("#e7f8ee", "#fff6db", "#fde7e7", "#e8edff"),
 
 ACCENT = ACCENTS["Mor"][0]
 MUTED = "#64748b"
+TEXT_COLOR = "#1e293b"
 
 
 def resource(name):
@@ -51,7 +52,7 @@ def app_icon():
 
 
 def build_style(accent="Mor", dark=False, radius="Normal", background="Sade"):
-    global ACCENT, MUTED
+    global ACCENT, MUTED, TEXT_COLOR
     R = RADII.get(radius, 8)
     R2 = R + 4
     a, a_hover, a_soft, side = ACCENTS.get(accent, ACCENTS["Mor"])
@@ -72,7 +73,10 @@ def build_style(accent="Mor", dark=False, radius="Normal", background="Sade"):
         BG = plain_dark if dark else plain
         PAGE_BG = BG
     CHECK = resource("check_white.png").replace("\\", "/")
+    WARN_BG, WARN_TEXT, WARN_BORDER = (("#3d3315", "#fde68a", "#a16207") if dark else
+                                       ("#fff7e0", "#854d0e", "#facc15"))
     ACCENT = a
+    TEXT_COLOR = TEXT
     for color, value in zip((GREEN, YELLOW, RED, BLUE), _ROWS[dark]):
         color.setRgb(QColor(value).rgb())
     tone = "light" if dark else "dark"
@@ -99,6 +103,10 @@ QGroupBox::title {{
     background: transparent;
 }}
 QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px; }}
+QLabel#warnBox {{
+    background: {WARN_BG}; color: {WARN_TEXT}; border: 1px solid {WARN_BORDER};
+    border-radius: {R}px; padding: 8px 12px;
+}}
 QFrame#hint {{ background: {a_soft}; border: 1px solid {a}; border-radius: {R2}px; }}
 
 /* Düğmeler */
@@ -129,7 +137,15 @@ QPushButton[variant="step"] {{
 }}
 QPushButton[variant="step"]:hover {{ background: {a_soft}; border-color: {a}; }}
 
-QPushButton#choice {{ text-align: left; padding: 5px 10px; font-weight: 500; }}
+QPushButton#choice {{
+    text-align: left; padding: 6px 14px; font-weight: 600; border-radius: 16px;
+    background: {CARD}; border: 1px solid {INPUT_BORDER}; color: {TEXT};
+}}
+QPushButton#choice[state="present"] {{ color: #15803d; border-color: #86efac; }}
+QPushButton#choice[state="absent"] {{
+    background: #fee2e2; color: #b91c1c; border: 1px solid #f87171;
+}}
+QPushButton#choice:hover {{ border-color: {a}; }}
 
 /* Giriş alanları */
 QLineEdit, QComboBox, QDateEdit, QSpinBox, QPlainTextEdit {{
@@ -157,6 +173,18 @@ QComboBox QAbstractItemView {{
     background: {CARD}; border: 1px solid {BORDER}; selection-background-color: {a_soft};
     selection-color: {TEXT}; outline: none;
 }}
+QTextEdit, QTextBrowser {{
+    background: {CARD}; color: {TEXT}; border: 1px solid {BORDER}; border-radius: {R}px;
+    padding: 6px; selection-background-color: {a};
+}}
+QMenu {{
+    background: {CARD}; color: {TEXT}; border: 1px solid {INPUT_BORDER}; border-radius: {R}px;
+    padding: 6px;
+}}
+QMenu::item {{ padding: 8px 28px 8px 14px; border-radius: 6px; color: {TEXT}; }}
+QMenu::item:selected {{ background: {a}; color: white; }}
+QMenu::indicator {{ width: 14px; height: 14px; left: 6px; }}
+QMenu::separator {{ height: 1px; background: {BORDER}; margin: 4px 8px; }}
 QCheckBox, QRadioButton {{ spacing: 8px; }}
 QCheckBox::indicator, QTableView::indicator, QListView::indicator {{
     width: 18px; height: 18px; border: 2px solid {MUTED}; border-radius: 5px; background: {CARD};
@@ -190,6 +218,12 @@ QHeaderView::section {{
 }}
 QTableCornerButton::section {{ background: {HEAD}; border: none; }}
 QListWidget#list::item {{ padding: 7px 8px; border-radius: 6px; }}
+QListWidget#chips {{ background: transparent; border: none; }}
+QListWidget#chips::item {{
+    background: {a_soft}; color: {TEXT}; border: 1px solid {a}; border-radius: 12px;
+    padding: 3px 10px;
+}}
+QListWidget#chips::item:selected {{ background: {a}; color: white; }}
 QListWidget#list::item:selected {{ background: {a_soft}; color: {TEXT}; }}
 
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
@@ -316,6 +350,29 @@ class WheelGuard(QObject):
 
 
 _guard = None
+_dark = None
+
+
+def _palette(dark):
+    from PySide6.QtGui import QPalette
+    pal = QPalette()
+    if dark:
+        colors = {QPalette.Window: "#0f172a", QPalette.WindowText: "#e2e8f0",
+                  QPalette.Base: "#1e293b", QPalette.AlternateBase: "#223047",
+                  QPalette.Text: "#e2e8f0", QPalette.Button: "#1e293b",
+                  QPalette.ButtonText: "#e2e8f0", QPalette.ToolTipBase: "#e2e8f0",
+                  QPalette.ToolTipText: "#0f172a", QPalette.PlaceholderText: "#94a3b8",
+                  QPalette.Highlight: "#4f46e5", QPalette.HighlightedText: "#ffffff"}
+    else:
+        colors = {QPalette.Window: "#f4f6fb", QPalette.WindowText: "#1e293b",
+                  QPalette.Base: "#ffffff", QPalette.AlternateBase: "#fafbfe",
+                  QPalette.Text: "#1e293b", QPalette.Button: "#ffffff",
+                  QPalette.ButtonText: "#1e293b", QPalette.ToolTipBase: "#1e293b",
+                  QPalette.ToolTipText: "#ffffff", QPalette.PlaceholderText: "#94a3b8",
+                  QPalette.Highlight: "#4f46e5", QPalette.HighlightedText: "#ffffff"}
+    for role, value in colors.items():
+        pal.setColor(role, QColor(value))
+    return pal
 
 
 def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal",
@@ -332,7 +389,10 @@ def apply(app, accent="Mor", dark=False, font_size="Normal", density="Normal",
     if _guard is None:
         app.setStyle("Fusion")
         app.setWindowIcon(app_icon())
-    global CURRENT_STYLE, STYLE_VERSION
+    global CURRENT_STYLE, STYLE_VERSION, _dark
+    if _dark is not dark:
+        _dark = dark
+        app.setPalette(_palette(dark))
     style = build_style(accent, dark, radius, background)
     if style != CURRENT_STYLE:
         CURRENT_STYLE = style

@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS absences (
     PRIMARY KEY (date, teacher)
 );
 
+CREATE TABLE IF NOT EXISTS jokers (
+    date TEXT NOT NULL,
+    teacher TEXT NOT NULL,
+    PRIMARY KEY (date, teacher)
+);
+
 CREATE TABLE IF NOT EXISTS assignments (
     date TEXT NOT NULL,
     hour INTEGER NOT NULL,
@@ -202,6 +208,23 @@ class Database:
                          for a in assignments])
         self.conn.commit()
 
+    def jokers(self, date):
+        return [r[0] for r in self.conn.execute(
+            "SELECT teacher FROM jokers WHERE date=? ORDER BY teacher", (date,))]
+
+    def set_jokers(self, date, names):
+        self.conn.execute("DELETE FROM jokers WHERE date=?", (date,))
+        self.conn.executemany("INSERT OR IGNORE INTO jokers VALUES (?,?)",
+                              [(date, n) for n in names if n])
+        self.conn.commit()
+
+    def delete_absent(self, date, teacher):
+        """Bir günün yalnızca bir gelmeyen öğretmenine ait kaydını siler (istatistikten de)."""
+        self.conn.execute("DELETE FROM absences WHERE date=? AND teacher=?", (date, teacher))
+        self.conn.execute("DELETE FROM assignments WHERE date=? AND absent_teacher=?",
+                          (date, teacher))
+        self.conn.commit()
+
     def delete_day(self, date):
         self.conn.execute("DELETE FROM absences WHERE date=?", (date,))
         self.conn.execute("DELETE FROM assignments WHERE date=?", (date,))
@@ -294,7 +317,7 @@ class Database:
 
     def reset_all(self):
         """Ders programı, nöbet çizelgeleri ve tüm kayıtları siler; okul bilgileri ve ayarlar kalır."""
-        for table in ("schedule_entries", "schedule_versions", "duty_entries", "absences",
+        for table in ("schedule_entries", "schedule_versions", "duty_entries", "absences", "jokers",
                       "assignments"):
             self.conn.execute(f"DELETE FROM {table}")
         for key in ("admins_extra", "admins_removed", "admins_confirmed"):

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 KIND_LABELS = {
     "nobetci": "Nöbetçi",
     "bos": "Nöbetçi değil (boş saati)",
+    "joker": "Joker öğretmen",
     "elle": "Elle seçildi",
     "yok": "Atanamadı",
 }
@@ -36,7 +37,7 @@ def teachers_with_lessons(schedule, weekday):
 
 
 def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per_day=0,
-             excluded=(), year_counts=None):
+             excluded=(), year_counts=None, jokers=()):
     """Günün görevlendirmesini hesaplar.
 
     schedule: {öğretmen: {(gün, saat): bilgi}}
@@ -48,6 +49,8 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         ulaşan nöbetçinin yerine boş öğretmen aranır; kimse yoksa yine nöbetçiye verilir.
     excluded: otomatik görevlendirilmeyecekler (ör. idareciler). Bunlar yalnızca elle seçim
         listesinde "idareci" etiketiyle yer alır.
+    jokers: o gün okulda olup boş derslere girebilecek, elle eklenen öğretmenler. Boş nöbetçi
+        kalmazsa diğer öğretmenlerden önce bunlar (adalet sırasıyla) görevlendirilir.
     """
     excluded = set(excluded)
     year_counts = year_counts or {}  # eğitim yılı toplamı: adalette önce buna bakılır
@@ -57,11 +60,12 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         if t not in duty_names and t not in excluded:
             duty_names.append(t)
     teaching = teachers_with_lessons(schedule, weekday)
+    joker_names = [t for t in dict.fromkeys(jokers) if t and t not in duty_names]
 
     def busy_hours(t):
         return {h for (d, h) in schedule.get(t, {}) if d == weekday}
 
-    busy = {t: busy_hours(t) for t in set(schedule) | set(duty_names)}
+    busy = {t: busy_hours(t) for t in set(schedule) | set(duty_names) | set(joker_names)}
     today = {}
 
     slots = []
@@ -87,12 +91,15 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
     for a in slots:
         h = a.hour
         free_duty = [t for t in duty_names if t not in absences and h not in busy.get(t, set())]
+        free_joker = [t for t in joker_names if t not in absences and h not in busy.get(t, set())]
         free_other = [t for t in teaching if t not in absences and t not in duty_names
-                      and t not in excluded and h not in busy.get(t, set())]
+                      and t not in joker_names and t not in excluded
+                      and h not in busy.get(t, set())]
         free_admins = [t for t in sorted(excluded) if t not in absences
                        and (t in teaching or t in {d for d, _ in duty})
                        and h not in busy.get(t, set())]
         a.options = ([(t, "nöbetçi") for t in sorted(free_duty, key=fairness)] +
+                     [(t, "joker") for t in sorted(free_joker, key=fairness)] +
                      [(t, "pencere" if window(t, h) else "boş saat")
                       for t in sorted(free_other, key=lambda t: (not window(t, h), fairness(t)))] +
                      [(t, "idareci") for t in free_admins])
@@ -101,6 +108,12 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
             pick = min(under_cap, key=fairness)
             a.assigned, a.kind = pick, "nobetci"
             a.note = ""
+        elif free_joker:
+            pick = min(free_joker, key=fairness)
+            a.assigned, a.kind = pick, "joker"
+            why = (f"boş nöbetçiler bugün {max_per_day} ders sınırına ulaştığı" if free_duty
+                   else "bu saatte boş nöbetçi öğretmen olmadığı")
+            a.note = f"Joker öğretmen: {why} için atandı."
         elif free_other:
             pick = min(free_other, key=lambda t: (not window(t, h), fairness(t)))
             a.assigned, a.kind = pick, "bos"

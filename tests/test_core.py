@@ -615,3 +615,27 @@ def test_nobetmatik_rules_override_free_days():
     cfg = Config(month="2026-11", teachers=sorted(sched), places=[["Bahçe", 1]])
     res = distribute(cfg, sched)
     assert all(res.reasons.get(t) for t in res.unassigned)
+
+
+def test_jokers_used_before_other_teachers():
+    from nobet.scheduler import plan_day
+    # A gelmedi (1. saat dersi var); nöbetçi N o saatte dolu; J joker; O başka boş öğretmen
+    sched = {"A": {(0, 1): "6/A MAT"}, "N": {(0, 1): "7/B FEN"}, "O": {(0, 2): "5/C TÜR"}}
+    plan = plan_day("2026-11-02", sched, [("N", "Bahçe")], {"A": "Raporlu"}, {}, {},
+                    jokers=["J"])
+    a = plan.assignments[0]
+    assert a.assigned == "J" and a.kind == "joker"
+    assert [t for t, lab in a.options if lab == "joker"] == ["J"]
+
+
+def test_delete_single_absent_teacher(tmp_path):
+    from nobet.db import Database
+    from nobet.scheduler import Assignment
+    db = Database(str(tmp_path / "v.db"))
+    db.save_day("2026-11-02", {"A": "Raporlu", "B": "İzinli"},
+                [Assignment(1, "A", "6/A", "X", "nobetci"), Assignment(2, "B", "7/A", "Y", "nobetci")])
+    db.delete_absent("2026-11-02", "A")
+    assert db.absences("2026-11-02") == {"B": "İzinli"}
+    assert [r[1] for r in db.assignments("2026-11-02")] == ["B"]
+    db.set_jokers("2026-11-02", ["J", "K"])
+    assert db.jokers("2026-11-02") == ["J", "K"]

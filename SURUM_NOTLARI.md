@@ -1,4 +1,24 @@
-Sürüm 2.1.3
+Sürüm 2.2.0
+
+Görevlendirme:
+- Yeni tasarım: her öğretmenin o günkü ders saatleri numaralı kutucuklarla gösterilir; Durum düğmesi renkli (Okulda yeşil, Raporlu/İzinli kırmızı)
+- 2. adım: boş kalan dersler ve nöbetçiler ferah; her nöbetçinin boş kalan saatlerde girip giremeyeceği yeşil/kırmızı kutucuklarla görünür, adalet sırası ve bu yıl kaç derse girdiği yazar
+- Joker öğretmenler: o gün okulda olup dersi olmayan öğretmenleri elle ekleyin (listeden seçin veya adını yazın). Boş nöbetçi kalmazsa önce joker öğretmenler görevlendirilir
+- Durum menüsü (Raporlu, İzinli…) artık net okunur
+
+Kayıtlar:
+- Her gelmeyen öğretmen ayrı satırda; aynı gün iki öğretmen gelmediyse iki ayrı satır olur
+- Yalnızca seçili öğretmenin kaydı silinebilir ("Kaydı sil"); o günün diğer öğretmenleri silinmez. Silinen kayıt istatistikten de düşülür
+
+Ders programı:
+- Sınıfı yazmayan dersler (ör. DESTEK) sarı işaretlenir; kaç ders olduğu ve hangi öğretmenler olduğu yazar. Sarı hücreye çift tıklayıp sınıfı ekleyebilirsiniz
+- Yeni program yüklerken önizlemede de bu dersler listelenir
+
+Diğer:
+- Güncelleme penceresinde yenilikler net ve okunaklı (yalnızca yeni sürümün notları, başlıklı ve maddeli)
+- Koyu temada da bütün yazılar okunur
+
+Sürüm 2.1.3'teki yenilikler
 
 - Bütün sorularda düğmeler Türkçe: Evet / Hayır, Tamam, Vazgeç (çıkış, silme, güncelleme vb.)
 - Programın kendi pencereleri de Türkçe (baskı önizleme, dosya seçme, sağ tık menüsü)

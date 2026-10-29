@@ -4,7 +4,8 @@ import os
 import re
 import shutil
 
-from PySide6.QtCore import QDate, QLocale, QStandardPaths, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import (QDate, QLocale, QRect, QSize, QStandardPaths, Qt, QThread, QTimer,
+                            QUrl, Signal)
 from PySide6.QtGui import QColor, QDesktopServices, QImage, QPageLayout, QPixmap, QTextDocument
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox,
                                QStackedWidget,
@@ -220,6 +221,67 @@ def align(table, *center):
     return table
 
 
+class HourStripDelegate(QStyledItemDelegate):
+    """Bir günün ders saatlerini numaralı küçük kutucuklarla çizer (pencere açmadan, hızlı).
+
+    Hücre verisi (Qt.UserRole): {"max": 8, "lessons": {1, 2}} — dersi olan saatler dolu;
+    ya da {"max": 8, "need": {3, 5}, "busy": {5}} — boş kalan saatlerde yeşil = girebilir,
+    kırmızı = kendi dersi var; diğer saatler soluk.
+    """
+    BOX, GAP = 24, 5
+
+    def paint(self, painter, option, index):
+        from PySide6.QtGui import QPen
+        from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ""
+        opt.widget.style().drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        data = index.data(Qt.UserRole) or {}
+        hours = (list(range(1, int(data.get("max", 8)) + 1)) if "lessons" in data
+                 else sorted(data.get("need", ())))
+        dark = bool(theme._dark)
+        painter.save()
+        painter.setRenderHint(painter.RenderHint.Antialiasing)
+        f = painter.font()
+        f.setPointSizeF(max(7.0, f.pointSizeF() - 1.5))
+        f.setBold(True)
+        painter.setFont(f)
+        x = option.rect.left() + 8
+        y = option.rect.top() + (option.rect.height() - self.BOX) // 2
+        muted = QColor("#64748b" if not dark else "#94a3b8")
+        for h in hours:
+            r = QRect(x, y, self.BOX, self.BOX)
+            if "lessons" in data:
+                on = h in data["lessons"]
+                fill = QColor(theme.ACCENT) if on else QColor(0, 0, 0, 0)
+                pen = QColor(theme.ACCENT) if on else QColor("#cbd5e1" if not dark else "#475569")
+                text = QColor("white") if on else muted
+            else:
+                need, busy = data.get("need", set()), data.get("busy", set())
+                if h in need and h not in busy:
+                    fill, pen, text = QColor("#16a34a"), QColor("#16a34a"), QColor("white")
+                elif h in need:
+                    fill, pen, text = (QColor("#fee2e2" if not dark else "#47201f"),
+                                       QColor("#f87171"), QColor("#b91c1c" if not dark
+                                                                 else "#fecaca"))
+                else:
+                    fill, pen = QColor(0, 0, 0, 0), QColor("#e2e8f0" if not dark else "#334155")
+                    text = QColor("#cbd5e1" if not dark else "#475569")
+            painter.setPen(QPen(pen, 1.2))
+            painter.setBrush(fill)
+            painter.drawRoundedRect(r, 6, 6)
+            painter.setPen(text)
+            painter.drawText(r, Qt.AlignCenter, str(h))
+            x += self.BOX + self.GAP
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        data = index.data(Qt.UserRole) or {}
+        n = int(data.get("max", 8)) if "lessons" in data else len(data.get("need", ()))
+        return QSize(16 + n * (self.BOX + self.GAP), self.BOX + 14)
+
+
 def run_dialog(dlg):
     """Pencereyi açar; kapanınca belleği bırakır (açık kalan eski pencereler programı ve tema
     değişimini yavaşlatır). Silme olay döngüsüne dönülünce yapılır, sonuçlar okunabilir."""
@@ -258,6 +320,27 @@ class Worker(QThread):
             self.failed.emit(str(e))
 
 
+def missing_class(data):
+    """Sınıfı okunamayan dersler: {öğretmen: [(gün, saat, bilgi), ...]}."""
+    out = {}
+    for t, slots in data.items():
+        for (d, h), info in sorted(slots.items()):
+            if info and not split_info(info)[0]:
+                out.setdefault(t, []).append((d, h, info))
+    return out
+
+
+def missing_class_text(data):
+    miss = missing_class(data)
+    if not miss:
+        return ""
+    n = sum(len(v) for v in miss.values())
+    kinds = sorted({i for v in miss.values() for _d, _h, i in v})
+    return (f"⚠ <b>{n} derste sınıf yazmıyor</b> ({len(miss)} öğretmen; ör. "
+            f"{', '.join(kinds[:3])}). PDF'te bu hücrelerde sınıf adı yok. Sarı hücrelere çift "
+            "tıklayıp sınıfı ekleyebilirsiniz (ör. <i>6/A DESTEK</i>).")
+
+
 class WeekGrid(QTableWidget):
     """Bir öğretmenin haftalık programı (satır: saat, sütun: gün)."""
 
@@ -277,7 +360,11 @@ class WeekGrid(QTableWidget):
         for (d, h), info in slots.items():
             if 0 <= d < 5 and h >= 1:
                 it = _item(info, self.editable)
-                it.setBackground(GREEN)
+                if info and not split_info(info)[0]:
+                    it.setBackground(YELLOW)   # sınıf okunamadı
+                    it.setToolTip("Sınıf yazmıyor — çift tıklayıp sınıfı ekleyin (ör. 6/A DESTEK)")
+                else:
+                    it.setBackground(GREEN)
                 self.setItem(h - 1, d, it)
         for r in range(self.rowCount()):
             for c in range(5):
@@ -327,7 +414,18 @@ class ScheduleReviewDialog(QDialog):
         self.date.setCalendarPopup(True)
         self.date.setDisplayFormat("dd.MM.yyyy")
 
-        warn = QPlainTextEdit("\n".join(result.warnings) or "Uyarı yok.")
+        miss = missing_class(result.teachers)
+        extra = []
+        if miss:
+            extra.append(f"{sum(len(v) for v in miss.values())} derste sınıf yazmıyor (sarı "
+                         "hücreler): " + "; ".join(
+                             f"{t}: " + ", ".join(f"{DAYS[d][:3]} {h}. {i}" for d, h, i in v)
+                             for t, v in sorted(miss.items())))
+        for r, n in enumerate(self.names):
+            if n in miss:
+                self.table.item(r, 1).setBackground(YELLOW)
+                self.table.item(r, 1).setToolTip("Bazı derslerinde sınıf yazmıyor")
+        warn = QPlainTextEdit("\n".join(list(result.warnings) + extra) or "Uyarı yok.")
         warn.setReadOnly(True)
         warn.setMaximumHeight(110)
         layouts = ", ".join(sorted(set(result.layouts))) or "—"
@@ -853,6 +951,7 @@ class DailyTab(QWidget):
         self.duty = []
         self.admins = set()
         self.row_index = {}
+        self.day_len = 8
 
         self.stepbar = theme.StepBar(["Gelmeyen öğretmenleri seçin", "Boş dersler ve nöbetçiler",
                                       "Görevlendirme"])
@@ -894,15 +993,18 @@ class DailyTab(QWidget):
         show_saved = variant(QPushButton("Görevlendirmeyi göster"), "primary")
         show_saved.clicked.connect(lambda: self.go(2))
         sb.addWidget(show_saved)
-        self.people = QTableWidget(0, 3)
-        self.people.setHorizontalHeaderLabels(["O gün dersi olan öğretmenler", "Bugünkü dersleri",
+        self.people = QTableWidget(0, 4)
+        self.people.setHorizontalHeaderLabels(["Öğretmen", "Bugünkü ders saatleri", "Ders",
                                                "Durum"])
-        align(self.people)
         _stretch(self.people, 0)
-        self.people.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.people.setColumnWidth(2, 200)
+        align(self.people, 2)
+        self.people.setItemDelegateForColumn(1, HourStripDelegate(self.people))
+        for c, w in ((1, 260), (2, 64), (3, 190)):
+            self.people.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
+            self.people.setColumnWidth(c, w)
+        self.people.setShowGrid(False)
         self.people.verticalHeader().hide()
-        self.people.verticalHeader().setDefaultSectionSize(40)
+        self.people.verticalHeader().setDefaultSectionSize(46)
         self.people.setSelectionMode(QAbstractItemView.NoSelection)
         self.people.setFocusPolicy(Qt.NoFocus)
         self.people.setMinimumHeight(170)
@@ -934,10 +1036,9 @@ class DailyTab(QWidget):
         self.gaps.setHorizontalHeaderLabels(["Saat", "Sınıf", "Ders"])
         align(self.gaps, 0, 1)
         self.dutyt = QTableWidget(0, 4)
-        self.dutyt.setHorizontalHeaderLabels(["Nöbetçi öğretmen", "Boş saatleri", "Sıra",
+        self.dutyt.setHorizontalHeaderLabels(["Sıra", "Nöbetçi öğretmen", "Boş kalan saatlerde",
                                               "Girdiği"])
-        align(self.dutyt, 2, 3)
-        for c, tip in ((2, "Adalet sırası: 1 numara ilk görevlendirilecek kişidir (bu yıl en az "
+        for c, tip in ((0, "Adalet sırası: 1 numara ilk görevlendirilecek kişidir (bu yıl en az "
                            "boş derse giren)"),
                        (3, "Bu eğitim yılında girdiği boş ders sayısı (onaylanmış "
                            "görevlendirmeler); parantez içi bu ay")):
@@ -945,21 +1046,69 @@ class DailyTab(QWidget):
         for t, stretch_col in ((self.gaps, 2), (self.dutyt, 1)):
             _stretch(t, stretch_col)
             t.setMinimumHeight(150)
+            t.setShowGrid(False)
             t.verticalHeader().hide()
-            t.verticalHeader().setDefaultSectionSize(38)
+            t.verticalHeader().setDefaultSectionSize(40)
             t.setSelectionMode(QAbstractItemView.NoSelection)
             t.setFocusPolicy(Qt.NoFocus)
-        for c, w in ((2, 48), (3, 70)):
+        align(self.gaps, 0, 1)
+        align(self.dutyt, 0, 3)
+        self.dutyt.setItemDelegateForColumn(2, HourStripDelegate(self.dutyt))
+        for c, w in ((0, 48), (2, 120), (3, 70)):
             self.dutyt.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
             self.dutyt.setColumnWidth(c, w)
-        self.gaps_box = QGroupBox("Gelmeyen öğretmenlerin dersleri")
-        QVBoxLayout(self.gaps_box).addWidget(self.gaps)
+        for c, w in ((0, 72), (1, 64)):
+            self.gaps.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
+            self.gaps.setColumnWidth(c, w)
+        legend = QLabel("Kutucuklar boş kalan ders saatleridir: <span style='color:#16a34a'>■</span> "
+                        "boş, derse girebilir &nbsp; <span style='color:#f87171'>■</span> o saatte "
+                        "kendi dersi var")
+        legend.setObjectName("subtitle")
+        self.gaps_box = QGroupBox("Boş kalan dersler")
+        gl = QVBoxLayout(self.gaps_box)
+        gl.setContentsMargins(12, 18, 12, 12)
+        gl.addWidget(self.gaps)
         self.duty_box = QGroupBox("Bugünün nöbetçileri")
-        QVBoxLayout(self.duty_box).addWidget(self.dutyt)
+        dl = QVBoxLayout(self.duty_box)
+        dl.setContentsMargins(12, 18, 12, 12)
+        dl.addWidget(self.dutyt, 1)
+        dl.addWidget(legend)
+
+        # Joker öğretmenler: o gün okulda olan, elle eklenen öğretmenler
+        self.joker_pick = QComboBox()
+        self.joker_pick.setEditable(True)
+        self.joker_pick.setInsertPolicy(QComboBox.NoInsert)
+        self.joker_pick.lineEdit().setPlaceholderText("Öğretmen seçin veya adını yazın…")
+        self.joker_pick.completer().setCompletionMode(QCompleter.PopupCompletion)
+        self.joker_pick.completer().setFilterMode(Qt.MatchContains)
+        self.joker_pick.setMinimumHeight(36)
+        add_j = variant(QPushButton("＋  Ekle"), "primary")
+        add_j.clicked.connect(self._add_joker)
+        self.joker_list = QListWidget()
+        self.joker_list.setObjectName("chips")
+        self.joker_list.setFlow(QListWidget.LeftToRight)
+        self.joker_list.setWrapping(True)
+        self.joker_list.setSpacing(4)
+        self.joker_list.setFixedHeight(34)
+        rem_j = variant(QPushButton("Çıkar"), "danger")
+        rem_j.clicked.connect(self._remove_joker)
+        self.joker_box = QFrame()
+        self.joker_box.setObjectName("card")
+        jl = QHBoxLayout(self.joker_box)
+        jl.setContentsMargins(14, 8, 10, 8)
+        self.joker_title = QLabel("<b>🃏 Joker öğretmenler</b>")
+        self.joker_title.setToolTip("Bugün okulda olup dersi olmayan öğretmenler. Boş nöbetçi "
+                                    "kalmazsa önce bunlar görevlendirilir.")
+        jl.addWidget(self.joker_title)
+        jl.addWidget(self.joker_list, 1)
+        jl.addWidget(rem_j)
+        self.joker_pick.setMinimumWidth(240)
+        jl.addWidget(self.joker_pick)
+        jl.addWidget(add_j)
         g2 = QHBoxLayout()
         g2.setSpacing(14)
         g2.addWidget(self.gaps_box, 4)
-        g2.addWidget(self.duty_box, 5)
+        g2.addWidget(self.duty_box, 6)
         back2 = QPushButton("←  Geri")
         back2.setMinimumHeight(46)
         back2.clicked.connect(lambda: self.go(0))
@@ -969,8 +1118,9 @@ class DailyTab(QWidget):
         self.run_btn.clicked.connect(lambda: self.run())
         f2 = QHBoxLayout()
         f2.addWidget(back2)
-        info2 = QLabel("Program, o saatte dersi olmayan nöbetçilerden bu yıl en az derse girmiş "
-                       "olanı seçer; boş nöbetçi yoksa diğer boş öğretmenlerden seçer.")
+        info2 = QLabel("Sıra: o saatte boş olan nöbetçilerden bu yıl en az derse girmiş olan; "
+                       "boş nöbetçi yoksa joker öğretmenler, onlar da yoksa o saatte dersi "
+                       "olmayan diğer öğretmenler.")
         info2.setObjectName("subtitle")
         info2.setWordWrap(True)
         f2.addWidget(info2, 1)
@@ -978,6 +1128,7 @@ class DailyTab(QWidget):
         p2 = QWidget()
         v2 = QVBoxLayout(p2)
         v2.setContentsMargins(0, 0, 0, 0)
+        v2.addWidget(self.joker_box)
         v2.addLayout(g2, 1)
         v2.addLayout(f2)
 
@@ -1132,6 +1283,8 @@ class DailyTab(QWidget):
         # İdareciler listelenmez: onlara zaten boş ders görevlendirmesi yapılmaz
         teaching = sorted((t for t in teachers_with_lessons(self.schedule, wd)
                            if t not in self.admins), key=normalize)
+        self.day_len = max([8] + [h for slots in self.schedule.values() for (d, h) in slots
+                                  if d == wd])
         if teaching:
             msgs.append(f"<span style='color:{theme.MUTED}'>Bugün {len(teaching)} öğretmenin dersi "
                         f"var, {len({t for t, _ in self.duty})} nöbetçi.</span>")
@@ -1144,7 +1297,11 @@ class DailyTab(QWidget):
             k = len(self._lessons_today(n))
             it = _item(f"{n}")
             self.people.setItem(r, 0, it)
-            self.people.setItem(r, 1, _item(f"{k} ders  ({', '.join(map(str, self._lessons_today(n)))}. saat)"))
+            strip = _item("")
+            strip.setData(Qt.UserRole, {"max": self.day_len, "lessons": set(self._lessons_today(n))})
+            strip.setToolTip(", ".join(map(str, self._lessons_today(n))) + ". saatlerde dersi var")
+            self.people.setItem(r, 1, strip)
+            self.people.setItem(r, 2, _item(k))
             combo = ChoiceButton(STATUSES)
             if n in saved_abs:
                 reason = saved_abs[n]
@@ -1152,7 +1309,7 @@ class DailyTab(QWidget):
                     combo.insertItem(combo.count() - 1, reason)
                 combo.setCurrentText(reason)
             combo.currentTextChanged.connect(lambda _t, row=r: self._status_changed(row))
-            self.people.setCellWidget(r, 2, combo)
+            self.people.setCellWidget(r, 3, combo)
             self._mark(r)
         self._filter(self.filter.text())
         if saved_abs:
@@ -1167,7 +1324,7 @@ class DailyTab(QWidget):
         return sorted(h for (d, h) in self.schedule.get(teacher, {}) if d == wd)
 
     def _status_changed(self, row):
-        combo = self.people.cellWidget(row, 2)
+        combo = self.people.cellWidget(row, 3)
         if combo.currentText() == OTHER:
             name = self.people.item(row, 0).text()
             dlg = QInputDialog(self)
@@ -1195,13 +1352,16 @@ class DailyTab(QWidget):
         self._update_picked()
 
     def _mark(self, row):
-        combo = self.people.cellWidget(row, 2)
+        combo = self.people.cellWidget(row, 3)
         absent = combo.currentText() != "Okulda"
-        combo.setStyleSheet("background:#fde7e7; color:#b91c1c; font-weight:600" if absent else "")
+        combo.setProperty("state", "absent" if absent else "present")
+        combo.style().unpolish(combo)
+        combo.style().polish(combo)
         it = self.people.item(row, 0)
         f = it.font()
         f.setBold(absent)
         it.setFont(f)
+        it.setForeground(QColor("#dc2626") if absent else QColor(theme.TEXT_COLOR))
 
     def _filter(self, text):
         key = normalize(text)
@@ -1211,7 +1371,7 @@ class DailyTab(QWidget):
     def absences(self):
         out = {}
         for r in range(self.people.rowCount()):
-            combo = self.people.cellWidget(r, 2)
+            combo = self.people.cellWidget(r, 3)
             s = combo.currentText() if combo else "Okulda"
             if s != "Okulda":
                 out[self.people.item(r, 0).text()] = s
@@ -1269,27 +1429,80 @@ class DailyTab(QWidget):
         self.dutyt.clearContents()
         self.dutyt.setRowCount(len(names))
         for r, t in enumerate(names):
-            for c, val in ((2, f"{r + 1}."),
-                           (3, f"{year.get(t, (0,))[0]}  ({month.get(t, (0,))[0]})")):
-                cell = _item(val)
-                cell.setTextAlignment(Qt.AlignCenter)
-                self.dutyt.setItem(r, c, cell)
+            rank = _item(f"{r + 1}")
+            name = _item(t)
+            if r == 0:
+                f = name.font()
+                f.setBold(True)
+                name.setFont(f)
+            strip = _item("")
             if t in absent:
-                txt, fit = "bugün gelmedi", []
+                strip.setData(Qt.UserRole, {"max": self.day_len, "need": set(), "busy": set()})
+                name.setText(f"{t}  (bugün gelmedi)")
+                name.setForeground(QColor("#dc2626"))
             else:
                 busy = set(self._lessons_today(t))
+                strip.setData(Qt.UserRole, {"max": self.day_len, "need": set(need),
+                                            "busy": busy & set(need)})
                 fit = sorted(h for h in need if h not in busy)
-                txt = (", ".join(str(h) for h in fit) + ". saat") if fit else "boş saati yok"
-            self.dutyt.setItem(r, 0, _item(t))
-            it = _item(txt)
-            if fit:
-                f = it.font()
-                f.setBold(True)
-                it.setFont(f)
-                it.setBackground(GREEN)
-            self.dutyt.setItem(r, 1, it)
-        self.gaps_box.setTitle(f"Gelmeyen öğretmenlerin dersleri — {total} ders boş kalıyor")
+                strip.setToolTip(("Girebileceği saatler: " + ", ".join(map(str, fit)))
+                                 if fit else "Boş kalan saatlerin hepsinde kendi dersi var")
+            count = _item(f"{year.get(t, (0,))[0]}  ({month.get(t, (0,))[0]})")
+            for c, it in enumerate((rank, name, strip, count)):
+                self.dutyt.setItem(r, c, it)
+        self.dutyt.setColumnWidth(2, max(120, 20 + len(need) * (HourStripDelegate.BOX +
+                                                                HourStripDelegate.GAP)))
+        self._fill_jokers()
+        self.gaps_box.setTitle(f"Boş kalan dersler — {total} ders")
         self.duty_box.setTitle(f"Bugünün nöbetçileri — {len(names)} kişi, adalet sırasıyla")
+
+    def _fill_jokers(self):
+        date = self.date_iso()
+        jokers = self.db.jokers(date)
+        self.joker_list.clear()
+        for t in jokers:
+            self.joker_list.addItem(t)
+        wd = self.date.date().dayOfWeek() - 1
+        busy_today = set(teachers_with_lessons(self.schedule, wd))
+        duty = {t for t, _ in self.duty}
+        # Önce o gün dersi olmayanlar, sonra diğerleri
+        names = sorted((t for t in self.db.all_teachers()
+                        if t not in duty and t not in jokers and t not in self.absences()),
+                       key=lambda t: (t in busy_today, normalize(t)))
+        cur = self.joker_pick.currentText()
+        self.joker_pick.clear()
+        self.joker_pick.addItems(names)
+        self.joker_pick.setCurrentText("" if cur in jokers else cur)
+        self.joker_title.setText("<b>🃏 Joker öğretmenler</b>" + (
+            "" if jokers else "<span style='color:#64748b'> — bugün okulda olup dersi olmayan "
+                              "öğretmenleri ekleyin; nöbetçi kalmazsa önce onlar girer</span>"))
+
+    def _add_joker(self):
+        name = clean_name(self.joker_pick.currentText())
+        if not name:
+            _info(self, "Listeden bir öğretmen seçin veya adını yazın.")
+            return
+        known = NameMatcher(self.db.all_teachers()).match(name)
+        name = known or name
+        if name in self.absences():
+            _info(self, f"{name} bugün gelmeyenler arasında.")
+            return
+        jokers = self.db.jokers(self.date_iso())
+        if name not in jokers:
+            self.db.set_jokers(self.date_iso(), jokers + [name])
+        self.joker_pick.setCurrentText("")
+        self.plan = None
+        self._fill_jokers()
+
+    def _remove_joker(self):
+        it = self.joker_list.currentItem()
+        if not it:
+            _info(self, "Çıkarmak için listeden bir joker öğretmen seçin.")
+            return
+        self.db.set_jokers(self.date_iso(), [t for t in self.db.jokers(self.date_iso())
+                                             if t != it.text()])
+        self.plan = None
+        self._fill_jokers()
 
     def run(self, saved=None):
         date = self.date_iso()
@@ -1302,7 +1515,8 @@ class DailyTab(QWidget):
         cap = int(self.db.get_setting("max_per_day", "0") or 0)
         year = self.db.year_counts(date, exclude_date=date)
         self.plan = plan_day(date, self.schedule, self.duty, self.absences(), counts, totals, cap,
-                             excluded=self.admins, year_counts=year)
+                             excluded=self.admins, year_counts=year,
+                             jokers=self.db.jokers(date))
         if saved:
             by_key = {(h, t): (a, k, n) for h, t, _info_, a, k, n in saved}
             for a in self.plan.assignments:
@@ -1346,7 +1560,8 @@ class DailyTab(QWidget):
                 combo.addItem("— atanmadı —", None)
                 opts = options_for(p, self.schedule, i)
                 for t, lab in opts:
-                    tag = {"nöbetçi": "", "idareci": "  (idareci)"}.get(lab, "  (nöbetçi değil)")
+                    tag = {"nöbetçi": "", "idareci": "  (idareci)",
+                           "joker": "  (joker)"}.get(lab, "  (nöbetçi değil)")
                     combo.addItem(t + tag, (t, lab))
                 if a.assigned and a.assigned not in [t for t, _ in opts]:
                     combo.addItem(a.assigned, (a.assigned, "kayıtlı"))
@@ -1365,8 +1580,11 @@ class DailyTab(QWidget):
         n = len(p.assignments)
         ok = sum(1 for a in p.assignments if a.kind == "nobetci")
         free = sum(1 for a in p.assignments if a.kind == "bos")
+        joker = sum(1 for a in p.assignments if a.kind == "joker")
         none = sum(1 for a in p.assignments if not a.assigned)
         parts = [f"<b>{n}</b> ders", f"<b>{ok}</b> nöbetçiye verildi"]
+        if joker:
+            parts.append(f"<b>{joker}</b> joker öğretmene verildi")
         if free:
             parts.append(f"<b style='color:#d97706'>{free}</b> nöbetçi olmayana verildi "
                          "(o saatte boş nöbetçi yoktu — sarı satırlar)")
@@ -1396,6 +1614,8 @@ class DailyTab(QWidget):
                 a.kind, a.note = "nobetci", "Elle seçildi."
             elif lab == "idareci":
                 a.kind, a.note = "bos", f"Elle seçildi; {t} idareci."
+            elif lab == "joker":
+                a.kind, a.note = "joker", f"Elle seçildi; {t} joker öğretmen."
             else:
                 a.kind = "bos"
                 a.note = f"⚠ Elle seçildi; {t} nöbetçi değil ({lab})."
@@ -1513,6 +1733,11 @@ class ScheduleTab(QWidget):
         bh.addWidget(rem)
         c1.addLayout(bh)
         c1.addWidget(self.versions, 1)
+        self.miss_main = QLabel()
+        self.miss_main.setWordWrap(True)
+        self.miss_main.setObjectName("warnBox")
+        self.miss_main.hide()
+        c1.addWidget(self.miss_main)
 
         # İdareciler: ders programı yüklendikten hemen sonra belirlenir
         self.admins_label = QLabel()
@@ -1544,7 +1769,11 @@ class ScheduleTab(QWidget):
         tl.addWidget(self.teachers, 1)
         for b in (add_t, ren_t, del_t):
             tl.addWidget(b)
+        self.miss_info = QLabel()
+        self.miss_info.setWordWrap(True)
+        self.miss_info.setObjectName("warnBox")
         gr = QVBoxLayout()
+        gr.addWidget(self.miss_info)
         gr.addWidget(QLabel("<b>Haftalık program</b> — hücreye çift tıklayıp düzenleyebilirsiniz"))
         gr.addWidget(self.grid, 1)
         gr.addWidget(save)
@@ -1634,8 +1863,27 @@ class ScheduleTab(QWidget):
         cur = self.teachers.currentItem().text() if self.teachers.currentItem() else None
         self.teachers.clear()
         self.teachers.addItems(sorted(self.data, key=normalize))
+        self._mark_missing()
+        text = missing_class_text(self.data)
+        self.miss_main.setText(text.replace("Sarı hücrelere", "<b>Programı görüntüle / "
+                                            "düzenle</b> ekranında sarı hücrelere"))
+        self.miss_main.setVisible(bool(text))
         items = self.teachers.findItems(cur or "", Qt.MatchExactly) if cur else []
         self.teachers.setCurrentRow(self.teachers.row(items[0]) if items else 0)
+
+    def _mark_missing(self):
+        miss = missing_class(self.data)
+        for i in range(self.teachers.count()):
+            it = self.teachers.item(i)
+            if it.text() in miss:
+                it.setBackground(YELLOW)
+                it.setToolTip(f"{len(miss[it.text()])} dersinde sınıf yazmıyor")
+            else:
+                it.setBackground(QColor(0, 0, 0, 0))
+                it.setToolTip("")
+        text = missing_class_text(self.data)
+        self.miss_info.setText(text)
+        self.miss_info.setVisible(bool(text))
 
     def _select_teacher(self, name):
         self.grid.load(self.data.get(name, {}))
@@ -1678,6 +1926,7 @@ class ScheduleTab(QWidget):
             return
         self.data[it.text()] = self.grid.slots()
         self._store()
+        self._mark_missing()
         self.win.statusBar().showMessage(f"{it.text()} programı kaydedildi.", 3000)
 
     def _ask_name(self, title, text=""):
@@ -2005,10 +2254,10 @@ class RecordsTab(QWidget):
 
         # Sol: günler (sade)
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Tarih", "Gelmeyen öğretmen", "Ders"])
+        self.table.setHorizontalHeaderLabels(["Tarih", "Gelmeyen öğretmen", "Durum"])
         _stretch(self.table, 1)
-        align(self.table, 0, 2)
-        for c, w in ((0, 120), (2, 56)):
+        align(self.table, 0)
+        for c, w in ((0, 100), (2, 84)):
             self.table.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
             self.table.setColumnWidth(c, w)
         self.table.verticalHeader().hide()
@@ -2019,7 +2268,7 @@ class RecordsTab(QWidget):
         self.table.setWordWrap(True)
         self.table.itemSelectionChanged.connect(self._show_detail)
         self.table.doubleClicked.connect(lambda _i: self.open_day())
-        left = QGroupBox("Günler")
+        left = QGroupBox("Gelmeyen öğretmenler")
         ll = QVBoxLayout(left)
         ll.setContentsMargins(12, 18, 12, 12)
         ll.addWidget(self.table)
@@ -2029,7 +2278,7 @@ class RecordsTab(QWidget):
         self.detail.setHorizontalHeaderLabels(["Saat", "Sınıf", "Ders", "Derse giren"])
         _stretch(self.detail, 3)
         align(self.detail, 0, 1)
-        for c, w in ((0, 70), (1, 64), (2, 150)):
+        for c, w in ((0, 64), (1, 56), (2, 110)):
             self.detail.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
             self.detail.setColumnWidth(c, w)
         self.detail.verticalHeader().hide()
@@ -2041,11 +2290,12 @@ class RecordsTab(QWidget):
         dl = QVBoxLayout(self.detail_box)
         dl.setContentsMargins(12, 18, 12, 12)
         dl.addWidget(self.detail)
-        open_b = variant(QPushButton("📂  Aç / değiştir"), "primary")
+        open_b = variant(QPushButton("📂  Aç"), "primary")
         open_b.clicked.connect(self.open_day)
-        prt = QPushButton("🖨  Yazdır / PDF")
+        prt = QPushButton("🖨  Yazdır")
         prt.clicked.connect(lambda: self.open_day(print_it=True))
-        rem = variant(QPushButton("🗑  Bu günü sil"), "danger")
+        rem = variant(QPushButton("🗑  Kaydı sil"), "danger")
+        rem.setToolTip("Yalnızca seçili öğretmenin bu günkü kaydını siler")
         rem.clicked.connect(self.delete_day)
         db_ = QHBoxLayout()
         db_.addWidget(open_b)
@@ -2068,8 +2318,9 @@ class RecordsTab(QWidget):
         top.addWidget(rem_all)
         body = QHBoxLayout()
         body.setSpacing(14)
-        body.addWidget(left, 4)
-        body.addWidget(self.detail_box, 5)
+        left.setMinimumWidth(340)
+        body.addWidget(left, 5)
+        body.addWidget(self.detail_box, 6)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(page_header("📋  Görevlendirme Kayıtları",
@@ -2079,7 +2330,7 @@ class RecordsTab(QWidget):
         v.addWidget(self.info)
         v.addLayout(body, 1)
         self.dates = []
-        self.days = []
+        self.rows = []
 
     def _range(self):
         if self.all_year.isChecked():
@@ -2089,28 +2340,32 @@ class RecordsTab(QWidget):
         return m + "-01", m + "-31"
 
     def refresh(self):
-        self.days = self.db.saved_days(*self._range())
-        self.dates = [d for d, _a, _r in self.days]
-        self.table.setRowCount(len(self.days))
+        days = self.db.saved_days(*self._range())
+        # Her gelmeyen öğretmen ayrı satır: (tarih, öğretmen, durum, dersleri)
+        self.rows = []
+        for date, absent, rows in days:
+            people = sorted(set(absent) | {x[1] for x in rows}, key=normalize)
+            for t in people:
+                self.rows.append((date, t, absent.get(t, ""), [x for x in rows if x[1] == t]))
+        self.dates = [r[0] for r in self.rows]
+        self.table.setRowCount(len(self.rows))
         lessons = 0
-        for r, (date, absent, rows) in enumerate(self.days):
+        for r, (date, t, why, rows) in enumerate(self.rows):
             d = dt.date.fromisoformat(date)
             lessons += len(rows)
             day = DAYS[d.weekday()] if d.weekday() < 5 else ""
-            cells = [f"{d.strftime('%d.%m.%Y')}\n{day}",
-                     "\n".join(f"{t}  ({why})" for t, why in sorted(absent.items())),
-                     len(rows)]
-            for c, val in enumerate(cells):
+            for c, val in enumerate((f"{d.strftime('%d.%m.%Y')}\n{day}", t, why)):
                 self.table.setItem(r, c, _item(val))
         self.table.resizeRowsToContents()
         for r in range(self.table.rowCount()):
-            self.table.setRowHeight(r, self.table.rowHeight(r) + 12)
+            self.table.setRowHeight(r, self.table.rowHeight(r) + 10)
         period = (f"{self._range()[0][:4]}–{int(self._range()[0][:4]) + 1} eğitim yılı"
                   if self.all_year.isChecked() else export.month_tr(self.month.key()))
-        self.info.setText(f"{period}: <b>{len(self.days)}</b> gün, <b>{lessons}</b> boş ders "
-                          "görevlendirmesi kayıtlı. Ayrıntısını görmek için soldan bir gün seçin."
-                          if self.days else f"{period} için onaylanmış görevlendirme yok.")
-        if self.days:
+        self.info.setText(f"{period}: <b>{len(days)}</b> gün, <b>{len(self.rows)}</b> gelmeyen "
+                          f"öğretmen, <b>{lessons}</b> boş ders görevlendirmesi kayıtlı. "
+                          "Ayrıntısını görmek için soldan bir satır seçin."
+                          if self.rows else f"{period} için onaylanmış görevlendirme yok.")
+        if self.rows:
             self.table.selectRow(0)
         self._show_detail()
 
@@ -2118,40 +2373,28 @@ class RecordsTab(QWidget):
         r = self.table.currentRow()
         self.detail.clearSpans()
         self.detail.setRowCount(0)
-        if r < 0 or r >= len(self.days):
-            self.detail_box.setTitle("Seçili gün")
+        if r < 0 or r >= len(self.rows):
+            self.detail_box.setTitle("Seçili kayıt")
             self.detail_box.setEnabled(False)
             return
         self.detail_box.setEnabled(True)
-        date, absent, rows = self.days[r]
+        date, who, why, rows = self.rows[r]
         d = dt.date.fromisoformat(date)
-        self.detail_box.setTitle(f"{d.strftime('%d.%m.%Y')} {DAYS[d.weekday()]} — "
-                                 f"{len(rows)} ders")
-        by_absent = {}
-        for hour, who, info, assigned, kind, note in rows:
-            by_absent.setdefault(who, []).append((hour, info, assigned, kind))
-        for who in sorted(by_absent, key=normalize):
+        self.detail_box.setTitle(f"{who} · {why} — {d.strftime('%d.%m.%Y')} "
+                                 f"{DAYS[d.weekday()]}, {len(rows)} ders")
+        for hour, _who, info, assigned, kind, note in sorted(rows):
+            sinif, ders = split_info(info or "")
             i = self.detail.rowCount()
             self.detail.insertRow(i)
-            head = _item(f"{who}  ·  {absent.get(who, '')}")
-            f = head.font()
-            f.setBold(True)
-            head.setFont(f)
-            head.setBackground(BLUE)
-            self.detail.setItem(i, 0, head)
-            self.detail.setSpan(i, 0, 1, 4)
-            for hour, info, assigned, kind in sorted(by_absent[who]):
-                sinif, ders = split_info(info or "")
-                i = self.detail.rowCount()
-                self.detail.insertRow(i)
-                giren = _item(assigned or "— atanamadı —")
-                if not assigned:
-                    giren.setBackground(RED)
-                elif kind != "nobetci":
-                    giren.setBackground(YELLOW)
-                for c, val in enumerate((f"{hour}. ders", sinif or "—", ders or "—")):
-                    self.detail.setItem(i, c, _item(val))
-                self.detail.setItem(i, 3, giren)
+            giren = _item(assigned or "— atanamadı —")
+            if not assigned:
+                giren.setBackground(RED)
+            elif kind != "nobetci":
+                giren.setBackground(YELLOW)
+                giren.setToolTip(note or "")
+            for c, val in enumerate((f"{hour}. ders", sinif or "—", ders or "—")):
+                self.detail.setItem(i, c, _item(val))
+            self.detail.setItem(i, 3, giren)
 
     def _selected(self):
         r = self.table.currentRow()
@@ -2175,20 +2418,23 @@ class RecordsTab(QWidget):
 
     def delete_day(self):
         date = self._selected()
-        if date and _ask(self, f"{dt.date.fromisoformat(date).strftime('%d.%m.%Y')} günün "
-                               "görevlendirmesi silinsin mi?\n\nBu günün sayıları "
-                               "istatistiklerden de düşülür."):
-            self.db.delete_day(date)
+        if not date:
+            return
+        _d, who, why, rows = self.rows[self.table.currentRow()]
+        if _ask(self, f"{dt.date.fromisoformat(date).strftime('%d.%m.%Y')} — {who} ({why}) "
+                      f"kaydı ve {len(rows)} dersin görevlendirmesi silinsin mi?\n\nO günün "
+                      "diğer öğretmenleri silinmez. Bu sayılar istatistiklerden de düşülür."):
+            self.db.delete_absent(date, who)
             self.win.write_excel()
             self.refresh()
 
     def delete_all(self):
         if not self.dates:
             return
-        if _ask(self, f"Listedeki {len(self.dates)} günün bütün görevlendirme kayıtları "
+        if _ask(self, f"Listedeki {len(set(self.dates))} günün bütün görevlendirme kayıtları "
                       "silinsin mi?\n\nİstatistikler de sıfırlanır. Bu işlem geri alınamaz "
                       "(isterseniz önce Ayarlar'dan yedek alın).", "Kayıtları sil"):
-            for d in self.dates:
+            for d in set(self.dates):
                 self.db.delete_day(d)
             self.win.write_excel()
             self.refresh()
@@ -2714,6 +2960,49 @@ class SettingsTab(QWidget):
             _info(self, "Yedek geri yüklendi.")
 
 
+def notes_html(notes, installed):
+    """Sürüm notlarını okunaklı HTML'e çevirir; yalnızca yüklü sürümden yeni olanları alır."""
+    import html as _html
+    import re as _re
+
+    def ver(text):
+        m = _re.search(r"(\d+)\.(\d+)\.(\d+)", text)
+        return tuple(int(x) for x in m.groups()) if m else None
+
+    mine = ver(installed) or (0, 0, 0)
+    if not any(line.strip().startswith("Sürüm ") and (ver(line) or (0,)) > mine
+               for line in (notes or "").splitlines()):
+        mine = (-1,)   # yeni bölüm bulunamadı: tümünü göster
+    out, keep, in_list = [], True, False
+    for raw in (notes or "").splitlines():
+        line = raw.strip()
+        if line.startswith("Sürüm "):
+            v = ver(line)
+            keep = v is None or v > mine
+            if keep:
+                if in_list:
+                    out.append("</ul>")
+                    in_list = False
+                out.append(f"<h3 style='margin:12px 0 4px 0'>🆕 Sürüm {'.'.join(map(str, v))}"
+                           "</h3>" if v else f"<h3>{_html.escape(line)}</h3>")
+            continue
+        if not keep or not line:
+            continue
+        if line.startswith("- "):
+            if not in_list:
+                out.append("<ul style='margin:0 0 0 -14px'>")
+                in_list = True
+            out.append(f"<li style='margin-bottom:5px'>{_html.escape(line[2:])}</li>")
+        else:
+            if in_list:
+                out.append("</ul>")
+                in_list = False
+            out.append(f"<p style='margin:8px 0 2px 0'><b>{_html.escape(line)}</b></p>")
+    if in_list:
+        out.append("</ul>")
+    return "".join(out) or "<p>Sürüm notu yok.</p>"
+
+
 class UpdateDialog(QDialog):
     """Yeni sürüm sorusu: yenilikler kaydırılabilir kutuda, Evet/Hayır her zaman görünür."""
 
@@ -2723,7 +3012,8 @@ class UpdateDialog(QDialog):
         self.setWindowTitle("Güncelleme")
         notes = QTextBrowser()
         notes.setOpenExternalLinks(True)
-        notes.setMarkdown(info.get("notes", "").strip() or "Sürüm notu yok.")
+        notes.setHtml("<div style='font-size:10.5pt; line-height:140%'>" +
+                      notes_html(info.get("notes", ""), __version__) + "</div>")
         bb = QDialogButtonBox(QDialogButtonBox.Yes | QDialogButtonBox.No)
         bb.button(QDialogButtonBox.Yes).setText("Evet, şimdi güncelle")
         variant(bb.button(QDialogButtonBox.Yes), "primary")
