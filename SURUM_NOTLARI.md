@@ -1,4 +1,11 @@
-Sürüm 2.4.0
+Sürüm 2.5.0
+
+- Görevlendirilen öğretmenlerin günlük programı: her öğretmen için başlığında adı olan tek satırlık tablo; o günkü kendi dersleri, boş saatleri ve sarı "GÖREV" hücreleri (hangi sınıf, hangi ders, kimin yerine) birlikte görünür
+- Baskıda ilk sayfa her zamanki görevlendirme çizelgesi, sonraki sayfa(lar) bu öğretmen programlarıdır; her satır kesilip öğretmene verilebilir, satırlar sayfa arasında bölünmez
+- Ekranda da görülebilir: Görevlendirme 3. adımda "Görevlendirilenlerin günlük programı" düğmesi
+- Tamamen yeni simge
+
+Sürüm 2.4.0'daki yenilikler
 
 Görevlendirme:
 - Sıra: önce o saatte boş nöbetçiler, sonra joker öğretmenler, en son gerekirse o saatte dersi olmayan diğer öğretmenler

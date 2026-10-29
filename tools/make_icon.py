@@ -14,8 +14,8 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "assets")
 
 
 def draw(size=512):
-    """Güçlü ve sade simge: canlı zeminde beyaz kalkan (nöbet), içinde saat (ders saati /
-    görevlendirme) ve köşede yeşil onay rozeti. 16 piksele kadar okunur."""
+    """Simge: sıcak renkli zeminde öğretmen figürü ve onu çevreleyen iki yönlü oklar
+    (gelmeyenin yerine görevlendirme), köşede takvim rozeti (nöbet çizelgesi)."""
     import math
     img = QImage(size, size, QImage.Format_ARGB32)
     img.fill(Qt.transparent)
@@ -23,74 +23,75 @@ def draw(size=512):
     p.setRenderHint(QPainter.Antialiasing)
     s = size / 512
 
-    # Zemin: lacivertten turkuaza çapraz geçiş, üstte parlama
+    # Zemin: turuncudan pembeye canlı geçiş, üstten yumuşak parlama
     g = QLinearGradient(0, 0, size, size)
-    g.setColorAt(0, QColor("#1e1b4b"))
-    g.setColorAt(0.55, QColor("#4338ca"))
-    g.setColorAt(1, QColor("#06b6d4"))
+    g.setColorAt(0, QColor("#fbbf24"))
+    g.setColorAt(0.45, QColor("#f97316"))
+    g.setColorAt(1, QColor("#db2777"))
     p.setPen(Qt.NoPen)
     p.setBrush(QBrush(g))
-    p.drawRoundedRect(QRectF(10 * s, 10 * s, 492 * s, 492 * s), 120 * s, 120 * s)
+    p.drawRoundedRect(QRectF(10 * s, 10 * s, 492 * s, 492 * s), 124 * s, 124 * s)
     shine = QLinearGradient(0, 0, 0, size)
-    shine.setColorAt(0, QColor(255, 255, 255, 70))
-    shine.setColorAt(0.45, QColor(255, 255, 255, 0))
+    shine.setColorAt(0, QColor(255, 255, 255, 80))
+    shine.setColorAt(0.5, QColor(255, 255, 255, 0))
     p.setBrush(QBrush(shine))
-    p.drawRoundedRect(QRectF(10 * s, 10 * s, 492 * s, 492 * s), 120 * s, 120 * s)
+    p.drawRoundedRect(QRectF(10 * s, 10 * s, 492 * s, 492 * s), 124 * s, 124 * s)
 
-    # Kalkan
-    def shield_path(cx, top, w, h):
-        path = QPainterPath()
-        path.moveTo(cx, top)
-        path.cubicTo(cx + w * 0.30, top + h * 0.10, cx + w * 0.42, top + h * 0.11, cx + w * 0.5,
-                     top + h * 0.11)
-        path.lineTo(cx + w * 0.5, top + h * 0.50)
-        path.cubicTo(cx + w * 0.5, top + h * 0.78, cx + w * 0.24, top + h * 0.92, cx, top + h)
-        path.cubicTo(cx - w * 0.24, top + h * 0.92, cx - w * 0.5, top + h * 0.78, cx - w * 0.5,
-                     top + h * 0.50)
-        path.lineTo(cx - w * 0.5, top + h * 0.11)
-        path.cubicTo(cx - w * 0.42, top + h * 0.11, cx - w * 0.30, top + h * 0.10, cx, top)
-        path.closeSubpath()
-        return path
-
-    cx = 256 * s
-    p.setBrush(QColor(15, 23, 42, 90))
-    p.drawPath(shield_path(cx, 72 * s + 14 * s, 330 * s, 380 * s))
-    p.setBrush(QColor("white"))
-    p.drawPath(shield_path(cx, 72 * s, 330 * s, 380 * s))
-
-    # Saat: lacivert halka, turuncu akrep ve yelkovan
-    cy, r = 250 * s, 104 * s
-    p.setBrush(QColor("#eef2ff"))
-    p.setPen(QPen(QColor("#312e81"), 22 * s))
-    p.drawEllipse(QPointF(cx, cy), r, r)
-    p.setPen(QPen(QColor("#312e81"), 9 * s, Qt.SolidLine, Qt.RoundCap))
-    for i in range(12):
-        ang = i * math.pi / 6
-        inner = r - (30 if i % 3 == 0 else 20) * s
-        p.drawLine(QPointF(cx + inner * math.sin(ang), cy - inner * math.cos(ang)),
-                   QPointF(cx + (r - 12 * s) * math.sin(ang), cy - (r - 12 * s) * math.cos(ang)))
-    hand = QPen(QColor("#f97316"), 20 * s, Qt.SolidLine, Qt.RoundCap)
-    p.setPen(hand)
-    p.drawLine(QPointF(cx, cy), QPointF(cx, cy - 66 * s))
-    p.drawLine(QPointF(cx, cy), QPointF(cx + 50 * s, cy + 18 * s))
-    p.setPen(Qt.NoPen)
-    p.setBrush(QColor("#312e81"))
-    p.drawEllipse(QPointF(cx, cy), 15 * s, 15 * s)
-
-    # Yeşil onay rozeti (sağ alt)
-    bx, by, br = 376 * s, 372 * s, 78 * s
-    p.setBrush(QColor(15, 23, 42, 90))
-    p.drawEllipse(QPointF(bx, by + 8 * s), br, br)
-    p.setPen(QPen(QColor("white"), 14 * s))
-    p.setBrush(QColor("#16a34a"))
-    p.drawEllipse(QPointF(bx, by), br, br)
-    p.setPen(QPen(QColor("white"), 26 * s, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    cx, cy = 248 * s, 262 * s
+    # İki yönlü dairesel oklar
+    ring = 158 * s
+    pen = QPen(QColor("white"), 34 * s, Qt.SolidLine, Qt.RoundCap)
+    p.setPen(pen)
     p.setBrush(Qt.NoBrush)
-    check = QPainterPath()
-    check.moveTo(QPointF(bx - 38 * s, by + 2 * s))
-    check.lineTo(QPointF(bx - 10 * s, by + 30 * s))
-    check.lineTo(QPointF(bx + 40 * s, by - 26 * s))
-    p.drawPath(check)
+    rect = QRectF(cx - ring, cy - ring, 2 * ring, 2 * ring)
+    for start in (20, 200):                      # iki yay, aralarında boşluk
+        p.drawArc(rect, int(start * 16), int(130 * 16))
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor("white"))
+    for end in (150, 330):                       # yayların ucunda ok başları
+        ang = math.radians(end)
+        tip = QPointF(cx + ring * math.cos(ang), cy - ring * math.sin(ang))
+        # yay yönüne teğet (saat yönünün tersi)
+        tx, ty = -math.sin(ang), -math.cos(ang)
+        nx, ny = math.cos(ang), -math.sin(ang)
+        L, W = 62 * s, 46 * s
+        head = QPainterPath()
+        head.moveTo(QPointF(tip.x() + tx * L * 0.55, tip.y() + ty * L * 0.55))
+        head.lineTo(QPointF(tip.x() - tx * L * 0.45 + nx * W, tip.y() - ty * L * 0.45 + ny * W))
+        head.lineTo(QPointF(tip.x() - tx * L * 0.45 - nx * W, tip.y() - ty * L * 0.45 - ny * W))
+        head.closeSubpath()
+        p.drawPath(head)
+
+    # Öğretmen figürü (baş + omuzlar), hafif gölgeli
+    for dy, color in ((10 * s, QColor(124, 45, 18, 90)), (0, QColor("white"))):
+        p.setBrush(color)
+        p.drawEllipse(QPointF(cx, cy - 46 * s + dy), 46 * s, 46 * s)
+        body = QPainterPath()
+        body.moveTo(QPointF(cx - 82 * s, cy + 86 * s + dy))
+        body.cubicTo(QPointF(cx - 82 * s, cy + 18 * s + dy), QPointF(cx - 42 * s, cy + 8 * s + dy),
+                     QPointF(cx, cy + 8 * s + dy))
+        body.cubicTo(QPointF(cx + 42 * s, cy + 8 * s + dy), QPointF(cx + 82 * s, cy + 18 * s + dy),
+                     QPointF(cx + 82 * s, cy + 86 * s + dy))
+        body.closeSubpath()
+        p.drawPath(body)
+
+    # Takvim rozeti (sağ üst)
+    bx, by, bw = 352 * s, 52 * s, 118 * s
+    p.setBrush(QColor(15, 23, 42, 70))
+    p.drawRoundedRect(QRectF(bx, by + 8 * s, bw, bw), 26 * s, 26 * s)
+    p.setPen(QPen(QColor("white"), 8 * s))
+    p.setBrush(QColor("#1e3a8a"))
+    p.drawRoundedRect(QRectF(bx, by, bw, bw), 26 * s, 26 * s)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor("#ef4444"))
+    top = QPainterPath()
+    top.addRoundedRect(QRectF(bx + 4 * s, by + 4 * s, bw - 8 * s, 34 * s), 22 * s, 22 * s)
+    p.drawPath(top)
+    p.setBrush(QColor("white"))
+    for i in range(3):
+        for j in range(2):
+            p.drawRoundedRect(QRectF(bx + (18 + i * 30) * s, by + (50 + j * 30) * s, 22 * s, 20 * s),
+                              5 * s, 5 * s)
     p.end()
     return img
 

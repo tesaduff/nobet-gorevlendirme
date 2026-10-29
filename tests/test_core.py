@@ -649,3 +649,16 @@ def test_joker_daily_limit_then_others():
     kinds = [a.kind for a in sorted(plan.assignments, key=lambda a: a.hour)]
     assert kinds.count("joker") == JOKER_MAX
     assert kinds[-1] == "bos" and plan.assignments[-1].assigned == "O"
+
+
+def test_teacher_programs_show_own_and_tasks():
+    from nobet.export import programs_html, teacher_programs
+    from nobet.scheduler import plan_day
+    sched = {"A": {(0, 1): "6/A MAT", (0, 2): "6/B MAT"}, "N": {(0, 3): "7/C FEN"}}
+    plan = plan_day("2026-11-02", sched, [("N", "Bahçe")], {"A": "Raporlu"}, {}, {})
+    n, rows = teacher_programs(plan, sched)
+    assert n >= 7 and rows[0][0] == "N"
+    cells = rows[0][1]
+    assert cells[1][0] == "task" and cells[2][0] == "task" and cells[3] == ("own", "7/C FEN")
+    assert "A yerine" in cells[1][1]
+    assert "GÜNLÜK PROGRAMI" in programs_html(plan, sched)

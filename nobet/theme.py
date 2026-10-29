@@ -158,6 +158,11 @@ QPushButton[variant="step"] {{
 }}
 QPushButton[variant="step"]:hover {{ background: {a_soft}; border-color: {a}; }}
 
+QPushButton#segment {{
+    background: {CARD}; color: {TEXT}; border: 1px solid {a}; border-radius: 0; padding: 8px 16px;
+    font-weight: 600;
+}}
+QPushButton#segment:checked {{ background: {a}; color: white; }}
 QPushButton#choice {{
     text-align: left; padding: 6px 14px; font-weight: 600; border-radius: 16px;
     background: {CARD}; border: 1px solid {INPUT_BORDER}; color: {TEXT};

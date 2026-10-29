@@ -1,4 +1,4 @@
 # Bu numara artırılıp main'e gönderildiğinde GitHub Actions yeni sürümü yayınlar.
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 APP_NAME = "NöbetGörev"
 APP_TAGLINE = "Nöbet Çizelgesi ve Öğretmen Görevlendirme"

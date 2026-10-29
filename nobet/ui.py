@@ -1246,11 +1246,38 @@ class DailyTab(QWidget):
         abs_lbl = QLabel("<b>Gelmeyen öğretmenler</b>")
         abs_box.addWidget(abs_lbl)
         abs_box.addWidget(self.abs_list, 1)
-        body3 = QHBoxLayout()
+        body3w = QWidget()
+        body3 = QHBoxLayout(body3w)
+        body3.setContentsMargins(0, 0, 0, 0)
         body3.setSpacing(12)
         body3.addLayout(abs_box)
         body3.addWidget(self.result, 1)
-        v3.addLayout(body3, 1)
+        # İkinci görünüm: görevlendirilen öğretmenlerin o günkü programı (tek satır)
+        self.progs = QTableWidget(0, 1)
+        self.progs.verticalHeader().hide()
+        self.progs.setSelectionMode(QAbstractItemView.NoSelection)
+        self.progs.setFocusPolicy(Qt.NoFocus)
+        self.progs.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.progs.setWordWrap(True)
+        self.view3 = QStackedWidget()
+        self.view3.addWidget(body3w)
+        self.view3.addWidget(self.progs)
+        seg = QHBoxLayout()
+        seg.setSpacing(0)
+        self.seg_btns = []
+        for i, text in enumerate(("📋  Gelmeyen öğretmenlere göre",
+                                  "👤  Görevlendirilenlerin günlük programı")):
+            b = QPushButton(text)
+            b.setCheckable(True)
+            b.setObjectName("segment")
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(lambda _c=False, k=i: self._view3(k))
+            self.seg_btns.append(b)
+            seg.addWidget(b)
+        seg.addStretch()
+        self.seg_btns[0].setChecked(True)
+        v3.addLayout(seg)
+        v3.addWidget(self.view3, 1)
         v3.addWidget(self.summary)
         v3.addLayout(f3)
 
@@ -1749,10 +1776,52 @@ class DailyTab(QWidget):
         self.steps.setCurrentIndex(2)
         self.stepbar.set(2)
 
+    def _view3(self, k):
+        for i, b in enumerate(self.seg_btns):
+            b.setChecked(i == k)
+        self.view3.setCurrentIndex(k)
+
+    def _fill_programs(self):
+        """Görevlendirilen öğretmenlerin o günkü programı: satır öğretmen, sütun ders saati."""
+        n, rows = export.teacher_programs(self.plan, self.schedule)
+        t = self.progs
+        t.clear()
+        t.setColumnCount(n + 1)
+        t.setHorizontalHeaderLabels(["Öğretmen"] + [f"{h}. ders" for h in range(1, n + 1)])
+        t.setRowCount(len(rows))
+        h = t.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        for c in range(1, n + 1):
+            h.setSectionResizeMode(c, QHeaderView.Stretch)
+        for r, (name, cells) in enumerate(rows):
+            k = sum(1 for kind, _ in cells.values() if kind == "task")
+            it = _item(f"{name}\n{k} ders görev")
+            f = it.font()
+            f.setBold(True)
+            it.setFont(f)
+            t.setItem(r, 0, it)
+            for hour in range(1, n + 1):
+                kind, text = cells.get(hour, ("free", "boş"))
+                cell = _item(("GÖREV\n" + text) if kind == "task" else text)
+                cell.setTextAlignment(Qt.AlignCenter)
+                if kind == "task":
+                    cell.setBackground(YELLOW)
+                    cf = cell.font()
+                    cf.setBold(True)
+                    cell.setFont(cf)
+                elif kind == "free":
+                    cell.setForeground(QColor("#94a3b8"))
+                t.setItem(r, hour, cell)
+        t.resizeRowsToContents()
+        for r in range(t.rowCount()):
+            t.setRowHeight(r, max(56, t.rowHeight(r) + 8))
+        self.seg_btns[1].setText(f"👤  Görevlendirilenlerin günlük programı ({len(rows)})")
+
     def show_plan(self, keep_list=False):
         p = self.plan
         if p is None:
             return
+        self._fill_programs()
         self.result.clearSpans()
         self.result.setRowCount(0)
         self.row_index = {}
@@ -1918,8 +1987,9 @@ class DailyTab(QWidget):
             _info(self, "Önce gelmeyen öğretmenleri seçip 'Görevlendirmeyi Oluştur'a basın.")
             return
         self._ensure_approved()
-        doc = html_document(export.day_html(self.plan, self.win.school_info(),
-                                            os.path.exists(logo_path())))
+        # Öğretmen programı satırları sayfa arasında bölünmesin
+        doc = keep_together(lambda breaks: export.day_html(
+            self.plan, self.win.school_info(), os.path.exists(logo_path()), self.schedule, breaks))
         preview(self, doc, f"gorevlendirme_{self.date_iso()}.pdf")
 
 

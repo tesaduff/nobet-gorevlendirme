@@ -21,8 +21,76 @@ def month_tr(month):
     return f"{months[int(m) - 1]} {y}"
 
 
-def day_html(plan, info=None, has_logo=False):
-    """Yazdırılacak resmî görevlendirme çizelgesi (A4 dikey)."""
+def teacher_programs(plan, schedule):
+    """Görevlendirilen her öğretmenin o günkü tek satırlık programı.
+
+    Dönen: (saat sayısı, [(öğretmen, {saat: (tür, yazı)}), ...]); tür "own" (kendi dersi),
+    "task" (görevlendirme) — boş saatler sözlükte yoktur. Öğretmenler ada göre sıralıdır.
+    """
+    wd = plan.weekday
+    tasks = {}
+    for a in plan.assignments:
+        if a.assigned:
+            tasks.setdefault(a.assigned, []).append(a)
+    hours = [h for slots in schedule.values() for (d, h) in slots if d == wd]
+    hours += [a.hour for a in plan.assignments]
+    n = max([7] + hours)
+    out = []
+    for t in sorted(tasks, key=normalize):
+        cells = {}
+        for (d, h), info in schedule.get(t, {}).items():
+            if d == wd:
+                sinif, ders = split_info(info or "")
+                cells[h] = ("own", " ".join(x for x in (sinif, lesson_label(ders)) if x))
+        for a in tasks[t]:
+            sinif, ders = split_info(a.info or "")
+            label = " ".join(x for x in (sinif, lesson_label(ders)) if x) or a.info
+            cells[a.hour] = ("task", f"{label}\n({a.absent} yerine)")
+        out.append((t, cells))
+    return n, out
+
+
+def programs_html(plan, schedule, breaks=()):
+    """Baskının ikinci sayfası: görevlendirilen öğretmenlerin o günkü programı (her öğretmen
+    için başlıklı tek satır; kesip öğretmene verilebilir)."""
+    e = html.escape
+    n, rows = teacher_programs(plan, schedule)
+    if not rows:
+        return ""
+    blocks = []
+    for t, cells in rows:
+        k = sum(1 for kind, _ in cells.values() if kind == "task")
+        tds = []
+        for h in range(1, n + 1):
+            kind, text = cells.get(h, ("free", ""))
+            text = "<br>".join(e(x) for x in text.split("\n"))
+            if kind == "task":
+                tds.append(f"<td align=center style='background:#ffe8a3'><b>GÖREV</b><br>{text}</td>")
+            elif kind == "own":
+                tds.append(f"<td align=center>{text}</td>")
+            else:
+                tds.append("<td align=center style='color:#94a3b8'>boş</td>")
+        blocks.append(
+            "<table border=1 cellspacing=0 cellpadding=3 width=100% "
+            "style='border-collapse:collapse; font-size:7.5pt'>"
+            f"<tr style='background:#cbd5e1'><td colspan={n}><b>{e(t)}</b> &nbsp;—&nbsp; "
+            f"{e(date_tr(plan.date))} günlük programı &nbsp;·&nbsp; <b>{k} ders görevlendirme</b>"
+            "</td></tr><tr style='background:#e2e8f0'>"
+            + "".join(f"<th width={100 // n}%>{h}. ders</th>" for h in range(1, n + 1))
+            + "</tr><tr>" + "".join(tds) + "</tr></table>")
+    return ("<h3 align=center style='page-break-before:always; margin:0 0 6px 0'>"
+            "GÖREVLENDİRİLEN ÖĞRETMENLERİN GÜNLÜK PROGRAMI</h3>"
+            f"<p align=center style='font-size:9pt; margin:0 0 8px 0'>{e(date_tr(plan.date))} — "
+            "sarı hücreler görevlendirilen derslerdir. Her öğretmenin satırını kesip "
+            "kendisine verebilirsiniz.</p>"
+            + "".join(f"<p style='margin:8px 0 0 0{'; page-break-before:always' if i in breaks else ''}'>"
+                      f"{MARK}</p>{b}" for i, b in enumerate(blocks))
+            + f"<p style='margin:0'>{MARK}</p>")
+
+
+def day_html(plan, info=None, has_logo=False, schedule=None, breaks=()):
+    """Yazdırılacak resmî görevlendirme çizelgesi (A4 dikey). schedule verilirse ikinci
+    sayfada görevlendirilen öğretmenlerin o günkü programı da yer alır."""
     e = html.escape
     info = info if isinstance(info, dict) else {"school": info or ""}
     school = info.get("school", "")
@@ -79,6 +147,7 @@ ilgili sınıflarda görevlendirilmiştir. Mor satırlar joker öğretmenlere, s
 olmayan diğer öğretmenlere verilen derslerdir.</p>
 <br><br>
 <table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
+{programs_html(plan, schedule, breaks) if schedule else ""}
 </body></html>"""
 
 
