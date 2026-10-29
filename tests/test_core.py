@@ -639,3 +639,13 @@ def test_delete_single_absent_teacher(tmp_path):
     assert [r[1] for r in db.assignments("2026-11-02")] == ["B"]
     db.set_jokers("2026-11-02", ["J", "K"])
     assert db.jokers("2026-11-02") == ["J", "K"]
+
+
+def test_joker_daily_limit_then_others():
+    from nobet.scheduler import JOKER_MAX, plan_day
+    # A'nın 8 dersi var, nöbetçi yok; joker J en fazla JOKER_MAX ders alır, kalan O'ya gider
+    sched = {"A": {(0, h): f"6/A D{h}" for h in range(1, 9)}, "O": {(0, 9): "5/A X"}}
+    plan = plan_day("2026-11-02", sched, [], {"A": "Raporlu"}, {}, {}, jokers=["J"])
+    kinds = [a.kind for a in sorted(plan.assignments, key=lambda a: a.hour)]
+    assert kinds.count("joker") == JOKER_MAX
+    assert kinds[-1] == "bos" and plan.assignments[-1].assigned == "O"

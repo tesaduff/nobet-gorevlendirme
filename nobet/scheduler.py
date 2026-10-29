@@ -36,6 +36,9 @@ def teachers_with_lessons(schedule, weekday):
     return sorted(t for t, slots in schedule.items() if any(d == weekday for d, _ in slots))
 
 
+JOKER_MAX = 7   # joker öğretmenin günde girebileceği en fazla ders (kendi dersleri dahil)
+
+
 def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per_day=0,
              excluded=(), year_counts=None, jokers=()):
     """Günün görevlendirmesini hesaplar.
@@ -50,7 +53,9 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
     excluded: otomatik görevlendirilmeyecekler (ör. idareciler). Bunlar yalnızca elle seçim
         listesinde "idareci" etiketiyle yer alır.
     jokers: o gün okulda olup boş derslere girebilecek, elle eklenen öğretmenler. Boş nöbetçi
-        kalmazsa diğer öğretmenlerden önce bunlar (adalet sırasıyla) görevlendirilir.
+        kalmazsa diğer öğretmenlerden önce bunlar (adalet sırasıyla) görevlendirilir. Bir joker
+        öğretmen günde en fazla JOKER_MAX saat derste olur (kendi dersleri dahil); jokerler
+        dolunca o saatte dersi olmayan diğer öğretmenlere geçilir.
     """
     excluded = set(excluded)
     year_counts = year_counts or {}  # eğitim yılı toplamı: adalette önce buna bakılır
@@ -91,7 +96,8 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
     for a in slots:
         h = a.hour
         free_duty = [t for t in duty_names if t not in absences and h not in busy.get(t, set())]
-        free_joker = [t for t in joker_names if t not in absences and h not in busy.get(t, set())]
+        free_joker = [t for t in joker_names if t not in absences and h not in busy.get(t, set())
+                      and len(busy.get(t, set())) < JOKER_MAX]
         free_other = [t for t in teaching if t not in absences and t not in duty_names
                       and t not in joker_names and t not in excluded
                       and h not in busy.get(t, set())]
@@ -101,7 +107,8 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         a.options = ([(t, "nöbetçi") for t in sorted(free_duty, key=fairness)] +
                      [(t, "joker") for t in sorted(free_joker, key=fairness)] +
                      [(t, "pencere" if window(t, h) else "boş saat")
-                      for t in sorted(free_other, key=lambda t: (not window(t, h), fairness(t)))] +
+                      for t in sorted(free_other, key=lambda t: (fairness(t)[:2], not window(t, h),
+                                                                 fairness(t)))] +
                      [(t, "idareci") for t in free_admins])
         under_cap = [t for t in free_duty if not max_per_day or today.get(t, 0) < max_per_day]
         if under_cap:
@@ -115,10 +122,13 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
                    else "bu saatte boş nöbetçi öğretmen olmadığı")
             a.note = f"Joker öğretmen: {why} için atandı."
         elif free_other:
-            pick = min(free_other, key=lambda t: (not window(t, h), fairness(t)))
+            # Diğer öğretmenlerde de istatistik esastır: bu yıl en az derse giren önce seçilir;
+            # eşitlikte iki dersi arasında boşluğu olan tercih edilir.
+            pick = min(free_other, key=lambda t: (fairness(t)[:2], not window(t, h), fairness(t)))
             a.assigned, a.kind = pick, "bos"
             gap = "iki dersi arasında boş saati var" if window(pick, h) else "bu saatte dersi yok"
             why = (f"boş nöbetçiler bugün {max_per_day} ders sınırına ulaştığı" if free_duty
+                   else "bu saatte boş nöbetçi ve joker öğretmen olmadığı" if joker_names
                    else "bu saatte boş nöbetçi öğretmen olmadığı")
             a.note = f"⚠ {pick} nöbetçi değil; {gap}. {why[0].upper() + why[1:]} için atandı."
         elif free_duty:

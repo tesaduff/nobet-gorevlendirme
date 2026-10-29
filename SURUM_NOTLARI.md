@@ -1,4 +1,23 @@
-Sürüm 2.3.2
+Sürüm 2.4.0
+
+Görevlendirme:
+- Sıra: önce o saatte boş nöbetçiler, sonra joker öğretmenler, en son gerekirse o saatte dersi olmayan diğer öğretmenler
+- Joker öğretmene günde 7 saate kadar ders verilir; jokerler dolunca diğer öğretmenlere geçilir
+- Diğer öğretmenler seçilirken de istatistik esastır: bu yıl en az derse giren önce
+- Renkler: joker öğretmen satırları mor, nöbetçi olmayan diğer öğretmen satırları sarı (ekran, çıktı, Excel)
+- Baskıda her gelmeyen öğretmenin tablosu ayrı, aralarında boşluk var
+
+Nöbet çizelgesi baskısı:
+- Daha toplu: haftalar bölünmeden sayfaya daha çok hafta sığar (ör. bir ay 2 sayfa); sütunlar her haftada aynı genişlikte
+
+Ders programı:
+- Program yüklerken önizlemede sınıfı eksik derse çift tıklayıp sınıfı yazabilirsiniz; düzelen hücre sarıdan normal renge döner
+
+Diğer:
+- Otomatik yedek: program açılınca, her kayıttan sonra ve kapanırken Belgeler\Nöbet Görevlendirme\Yedekler klasörüne yedek alınır (son 30 gün)
+- Yeni simge
+
+Sürüm 2.3.2'deki yenilikler
 
 - Joker öğretmen ekleme penceresi yenilendi: önce öğretmen listesine bakıp işaretlersiniz (arama kutusu var, kimin bugün dersi olmadığı yazar). Listede yoksa aynı pencerenin altındaki alana adını soyadını yazıp "Listeye ekle" dersiniz. Sonra "İşaretlileri joker yap"; eklenenler bildirilir
 

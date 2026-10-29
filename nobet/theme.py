@@ -32,9 +32,9 @@ BACKGROUNDS = {"Sade": ("#f4f6fb", "#0f172a"), "Renk geçişli": (None, None),
 FONTS = ["Segoe UI", "Calibri", "Arial", "Tahoma", "Verdana", "Trebuchet MS"]
 
 # Tablo satır renkleri: arayüz bu nesneleri kullanır, tema değişince yerinde güncellenir.
-GREEN, YELLOW, RED, BLUE = QColor(), QColor(), QColor(), QColor()
-_ROWS = {False: ("#e7f8ee", "#fff6db", "#fde7e7", "#e8edff"),
-         True: ("#123527", "#3d3315", "#47201f", "#252b4d")}
+GREEN, YELLOW, RED, BLUE, PURPLE = QColor(), QColor(), QColor(), QColor(), QColor()
+_ROWS = {False: ("#e7f8ee", "#fff6db", "#fde7e7", "#e8edff", "#f1e6ff"),
+         True: ("#123527", "#3d3315", "#47201f", "#252b4d", "#3b2557")}
 
 ACCENT = ACCENTS["Mor"][0]
 MUTED = "#64748b"
@@ -77,7 +77,7 @@ def build_style(accent="Mor", dark=False, radius="Normal", background="Sade"):
                                        ("#fff7e0", "#854d0e", "#facc15"))
     ACCENT = a
     TEXT_COLOR = TEXT
-    for color, value in zip((GREEN, YELLOW, RED, BLUE), _ROWS[dark]):
+    for color, value in zip((GREEN, YELLOW, RED, BLUE, PURPLE), _ROWS[dark]):
         color.setRgb(QColor(value).rgb())
     tone = "light" if dark else "dark"
     ARROW_DOWN = resource(f"chevron_down_{tone}.png").replace("\\", "/")

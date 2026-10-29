@@ -27,17 +27,18 @@ def day_html(plan, info=None, has_logo=False):
     info = info if isinstance(info, dict) else {"school": info or ""}
     school = info.get("school", "")
     city = info.get("school_city", "")
-    rows = []
+    tables = []
     groups = {}
     for a in plan.assignments:
         groups.setdefault(a.absent, []).append(a)
     for absent, items in groups.items():
+        rows = []
         reason = plan.absences.get(absent, "")
         rows.append(
             f"<tr style='background:#e2e8f0'><td colspan=5><b>{e(absent)}</b>"
             f" &nbsp;—&nbsp; Mazeret: <b>{e(reason)}</b> &nbsp;({len(items)} ders)</td></tr>")
         for a in items:
-            color = {"bos": "#fff6db", "yok": "#fde7e7"}.get(a.kind, "#ffffff")
+            color = {"bos": "#fff6db", "yok": "#fde7e7", "joker": "#f1e6ff"}.get(a.kind, "#ffffff")
             sinif, ders = split_info(a.info)
             ders = lesson_label(ders)
             note = e(a.note.replace("⚠ ", "")) if a.note else ""
@@ -47,6 +48,12 @@ def day_html(plan, info=None, has_logo=False):
                 f"<td><b>{e(a.assigned or '— atanmadı —')}</b>"
                 + (f"<br><span style='color:#92400e; font-size:7pt'>{note}</span>" if note else "") +
                 "</td><td width=18%></td></tr>")
+        # Her gelmeyen öğretmenin tablosu ayrı; aralarında bir satır boşluk olur
+        tables.append(
+            "<table border=1 cellspacing=0 cellpadding=5 width=100% "
+            "style='border-collapse:collapse'>"
+            "<tr style='background:#cbd5e1'><th>Saat</th><th>Sınıf</th><th>Ders</th>"
+            "<th>Derse Girecek Öğretmen</th><th>İmza</th></tr>" + "".join(rows) + "</table>")
     duty = ", ".join(f"{e(t)}" + (f" ({e(p)})" if p else "") for t, p in plan.duty) or "—"
     logo = "<img src='logo' height=70>" if has_logo else ""
     head = "<br>".join(x for x in ("T.C.", e(city), f"<b>{e(school)}</b>") if x)
@@ -66,14 +73,10 @@ def day_html(plan, info=None, has_logo=False):
 <table width=100% cellspacing=0 cellpadding=3 style="font-size:8.5pt">
 <tr><td width=22%><b>Nöbetçi öğretmenler:</b></td><td>{duty}</td></tr></table>
 <br>
-<table border=1 cellspacing=0 cellpadding=5 width=100% style="border-collapse:collapse">
-<tr style='background:#cbd5e1'><th>Saat</th><th>Sınıf</th><th>Ders</th>
-<th>Derse Girecek Öğretmen</th><th>İmza</th></tr>
-{''.join(rows) or '<tr><td colspan=5 align=center>Görevlendirme yok</td></tr>'}
-</table>
+{'<p style="margin:0">&nbsp;</p>'.join(tables) or '<p align=center>Görevlendirme yok</p>'}
 <p style="font-size:8pt; color:#475569">Yukarıda adı geçen öğretmenler belirtilen ders saatlerinde
-ilgili sınıflarda görevlendirilmiştir. Sarı satırlar nöbetçi olmayan öğretmenlere verilen
-derslerdir.</p>
+ilgili sınıflarda görevlendirilmiştir. Mor satırlar joker öğretmenlere, sarı satırlar nöbetçi
+olmayan diğer öğretmenlere verilen derslerdir.</p>
 <br><br>
 <table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
 </body></html>"""
@@ -94,7 +97,8 @@ def save_day_xlsx(path, plan, school=""):
     for c in ws[4]:
         c.font = Font(bold=True)
         c.fill = PatternFill("solid", fgColor="DDE4EE")
-    fills = {"bos": PatternFill("solid", fgColor="FFF4CC"), "yok": PatternFill("solid", fgColor="FFD6D6")}
+    fills = {"bos": PatternFill("solid", fgColor="FFF4CC"), "yok": PatternFill("solid", fgColor="FFD6D6"),
+             "joker": PatternFill("solid", fgColor="EFE2FF")}
     for a in plan.assignments:
         sinif, ders = split_info(a.info)
         ders = lesson_label(ders)
@@ -181,7 +185,8 @@ def write_records_xlsx(path, db, school=""):
 
     head_fill = PatternFill("solid", fgColor="DDE4EE")
     fills = {"bos": PatternFill("solid", fgColor="FFF4CC"),
-             "yok": PatternFill("solid", fgColor="FFD6D6")}
+             "yok": PatternFill("solid", fgColor="FFD6D6"),
+             "joker": PatternFill("solid", fgColor="EFE2FF")}
 
     def sheet(wb, title, headers, widths, first=False):
         ws = wb.active if first else wb.create_sheet()
@@ -313,12 +318,15 @@ def duty_html(month, entries, info=None, has_logo=False, exempt=None, places=Non
             rows.append(f"<tr><td><b>{DAYS[d.weekday()].upper()}</b><br>"
                         f"<span style='color:#475569'>{d.strftime('%d.%m.%Y')}</span></td>"
                         + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
-        head = "".join(f"<th>{e(c.upper())}</th>" for c in cols)
+        # Sütun genişlikleri her haftada aynı olsun (tablolar alt alta düzgün hizalanır)
+        place_w = (86 - (14 if has_admin else 0)) // max(1, len(order))
+        head = "".join(f"<th width={14 if c == 'Nöbetçi İdareci' else place_w}%>{e(c.upper())}</th>"
+                       for c in cols)
         brk = "; page-break-before:always" if len(blocks) in breaks else ""
         blocks.append(
-            f"<p style='margin:10px 0 4px 0{brk}'>{MARK}<b>{title}</b></p>"
-            "<table border=1 cellspacing=0 cellpadding=4 width=100% "
-            "style='border-collapse:collapse; font-size:8.5pt'>"
+            f"<p style='margin:6px 0 2px 0; font-size:8.5pt{brk}'>{MARK}<b>{title}</b></p>"
+            "<table border=1 cellspacing=0 cellpadding=2 width=100% "
+            "style='border-collapse:collapse; font-size:7.5pt'>"
             f"<tr style='background:#e2e8f0'><th width=14%>GÜNLER</th>{head}</tr>"
             + "".join(rows) + "</table>")
     sign_break = len(blocks) in breaks

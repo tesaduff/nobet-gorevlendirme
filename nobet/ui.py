@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QChe
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from . import export, theme, updater
-from .theme import BLUE, GREEN, RED, YELLOW, page_header, variant
+from .theme import BLUE, GREEN, PURPLE, RED, YELLOW, page_header, variant
 from .db import Database, data_dir
 from .names import DAYS, NameMatcher, clean_name, lesson_label, normalize, split_info
 from .parse_duty import DutyEntry, is_admin_place, parse_duty
@@ -371,6 +371,23 @@ class WeekGrid(QTableWidget):
         self.setVerticalHeaderLabels([f"{h}. ders" for h in range(1, hours + 1)])
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.setWordWrap(True)
+        if editable:
+            self.itemChanged.connect(self._paint)
+
+    def _paint(self, it):
+        """Hücre rengi içeriğe göre: ders + sınıf yeşil, sınıfı eksik sarı, boş renksiz."""
+        text = (it.text() or "").strip()
+        self.blockSignals(True)
+        if not text:
+            it.setBackground(QColor(0, 0, 0, 0))
+            it.setToolTip("")
+        elif not split_info(text)[0]:
+            it.setBackground(YELLOW)
+            it.setToolTip("Sınıf yazmıyor — çift tıklayıp sınıfı ekleyin (ör. 6/A DESTEK)")
+        else:
+            it.setBackground(GREEN)
+            it.setToolTip("")
+        self.blockSignals(False)
 
     def load(self, slots, hours=None):
         hours = max(hours or 8, max((h for _, h in slots), default=0))
@@ -429,7 +446,9 @@ class ScheduleReviewDialog(QDialog):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.currentCellChanged.connect(self._show)
 
-        self.grid = WeekGrid(result.max_hour)
+        self.grid = WeekGrid(result.max_hour, editable=True)
+        self.grid.itemChanged.connect(self._grid_edited)
+        self.current = None
         self.date = QDateEdit(_qdate(valid_from))
         self.date.setCalendarPopup(True)
         self.date.setDisplayFormat("dd.MM.yyyy")
@@ -452,14 +471,19 @@ class ScheduleReviewDialog(QDialog):
 
         left = QWidget()
         lv = QVBoxLayout(left)
-        lv.addWidget(QLabel(f"<b>{len(self.names)} öğretmen bulundu.</b> Algılanan yerleşim: "
+        info_lbl = QLabel(f"<b>{len(self.names)} öğretmen bulundu.</b> Algılanan yerleşim: "
                             f"{layouts}<br>Yanlış okunan isimleri çift tıklayıp düzeltin. Aynı "
-                            "ada çevrilen satırlar birleştirilir."))
+                            "ada çevrilen satırlar birleştirilir.<br><b>Sarı</b> öğretmen / "
+                            "hücre: sınıf yazmıyor — sağdaki programda hücreye çift tıklayıp "
+                            "sınıfı ekleyin (ör. <i>6/A DESTEK</i>); düzelince sarı kalkar.")
+        info_lbl.setWordWrap(True)
+        lv.addWidget(info_lbl)
         lv.addWidget(self.table)
         split = QSplitter()
         split.addWidget(left)
         split.addWidget(self.grid)
-        split.setSizes([420, 680])
+        self.grid.setMinimumWidth(520)
+        split.setSizes([380, 720])
 
         form = QFormLayout()
         form.addRow("Program şu tarihten itibaren geçerli:", self.date)
@@ -482,7 +506,23 @@ class ScheduleReviewDialog(QDialog):
 
     def _show(self, row, *_):
         if 0 <= row < len(self.names):
+            self.current = None
+            self.grid.blockSignals(True)
             self.grid.load(self.result.teachers[self.names[row]], self.result.max_hour)
+            self.grid.blockSignals(False)
+            self.current = row
+
+    def _grid_edited(self, _it):
+        """Önizlemede düzeltilen dersi (ör. eksik sınıf) okunan programa yazar."""
+        if self.current is None:
+            return
+        name = self.names[self.current]
+        self.result.teachers[name] = self.grid.slots()
+        miss = missing_class({name: self.result.teachers[name]})
+        cell = self.table.item(self.current, 1)
+        cell.setBackground(YELLOW if miss else QColor(0, 0, 0, 0))
+        cell.setToolTip("Bazı derslerinde sınıf yazmıyor" if miss else "")
+        self.table.item(self.current, 2).setText(str(len(self.result.teachers[name])))
 
     def teachers(self):
         out = {}
@@ -1773,7 +1813,7 @@ class DailyTab(QWidget):
                 combo.setCurrentIndex(idx)
                 combo.setToolTip(a.note or "Nöbetçi öğretmen")
                 combo.currentIndexChanged.connect(lambda _k, row=i, cb=combo: self._changed(row, cb))
-                color = {"bos": YELLOW, "yok": RED}.get(a.kind)
+                color = {"bos": YELLOW, "yok": RED, "joker": PURPLE}.get(a.kind)
                 if color:
                     combo.setStyleSheet("font-weight:600")
                     for c in range(3):
@@ -1787,10 +1827,11 @@ class DailyTab(QWidget):
         none = sum(1 for a in p.assignments if not a.assigned)
         parts = [f"<b>{n}</b> ders", f"<b>{ok}</b> nöbetçiye verildi"]
         if joker:
-            parts.append(f"<b>{joker}</b> joker öğretmene verildi")
+            parts.append(f"<b style='color:#7e22ce'>{joker}</b> joker öğretmene verildi "
+                         "(mor satırlar)")
         if free:
-            parts.append(f"<b style='color:#d97706'>{free}</b> nöbetçi olmayana verildi "
-                         "(o saatte boş nöbetçi yoktu — sarı satırlar)")
+            parts.append(f"<b style='color:#d97706'>{free}</b> dersi olmayan diğer öğretmene "
+                         "verildi (sarı satırlar)")
         if none:
             parts.append(f"<b style='color:#dc2626'>{none}</b> ders için boş öğretmen yok "
                          "(kırmızı satırlar)")
@@ -2593,6 +2634,9 @@ class RecordsTab(QWidget):
             giren = _item(assigned or "— atanamadı —")
             if not assigned:
                 giren.setBackground(RED)
+            elif kind == "joker":
+                giren.setBackground(PURPLE)
+                giren.setText(f"{assigned}  (joker)")
             elif kind != "nobetci":
                 giren.setBackground(YELLOW)
                 giren.setToolTip(note or "")
@@ -3063,11 +3107,20 @@ class SettingsTab(QWidget):
         restore.clicked.connect(self.restore)
         reset = variant(QPushButton("Tüm verileri sil, sıfırdan başla…"), "danger")
         reset.clicked.connect(self.reset)
-        g3, l3 = card("Veriler")
-        dpath = QLabel("Veriler yalnızca bu bilgisayarda tutulur ve güncellemede silinmez.")
+        g3, l3 = card("Veriler ve yedek")
+        dpath = QLabel("Veriler yalnızca bu bilgisayarda tutulur ve güncellemede silinmez. "
+                       "<b>Yedek otomatik alınır:</b> program açılınca, her kayıttan sonra ve "
+                       "kapanırken; her gün için bir yedek saklanır (son 30 gün).")
         dpath.setWordWrap(True)
+        self.backup_info = QLabel()
+        self.backup_info.setObjectName("okMsg")
+        self.backup_info.setWordWrap(True)
+        open_bk = QPushButton("Yedek klasörünü aç")
+        open_bk.clicked.connect(lambda: QDesktopServices.openUrl(
+            QUrl.fromLocalFile(self.win.backup_dir())))
         l3.addWidget(dpath)
-        l3.addLayout(row(folder, backup, restore, stretch_first=False))
+        l3.addWidget(self.backup_info)
+        l3.addLayout(row(open_bk, folder, backup, restore, stretch_first=False))
         l3.addLayout(row(reset, stretch_first=False))
 
         v = QVBoxLayout(self)
@@ -3252,6 +3305,7 @@ class MainWindow(QMainWindow):
         self._build()
         QTimer.singleShot(300, self.first_run)
         QTimer.singleShot(800, self.check_new_month)
+        QTimer.singleShot(2000, self.auto_backup)
         self._month_timer = QTimer(self)  # program açık kalırsa ay değişimini de yakala
         self._month_timer.timeout.connect(self.check_new_month)
         self._month_timer.start(60 * 60 * 1000)
@@ -3305,6 +3359,7 @@ class MainWindow(QMainWindow):
 
     def quit(self):
         if _ask(self, f"{APP_NAME} kapatılsın mı?", "Çıkış"):
+            self.auto_backup()
             QApplication.instance().quit()
 
     def go_first_step(self):
@@ -3417,6 +3472,38 @@ class MainWindow(QMainWindow):
         self.daily.refresh()
         self.write_excel()
 
+    def backup_dir(self):
+        docs = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation) or \
+            os.path.expanduser("~")
+        return os.path.join(docs, "Nöbet Görevlendirme", "Yedekler")
+
+    def auto_backup(self):
+        """Günün yedeğini alır (aynı gün içinde yenilenir), 30 günden eskileri siler."""
+        import glob
+        import sqlite3
+        folder = self.backup_dir()
+        try:
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, f"yedek_{dt.date.today().isoformat()}.db")
+            self.db.conn.commit()
+            dst = sqlite3.connect(path)
+            self.db.conn.backup(dst)
+            dst.close()
+            for old in sorted(glob.glob(os.path.join(folder, "yedek_*.db")))[:-30]:
+                os.remove(old)
+        except Exception as e:  # noqa: BLE001 — yedek alınamazsa program çalışmaya devam eder
+            self.statusBar().showMessage(f"⚠ Otomatik yedek alınamadı: {e}", 10000)
+            return False
+        if hasattr(self, "settings"):
+            self.settings.backup_info.setText(
+                f"✅ Son otomatik yedek: {QDate.currentDate().toString('d MMMM yyyy')} "
+                f"{dt.datetime.now().strftime('%H:%M')} — {path}")
+        return True
+
+    def closeEvent(self, event):
+        self.auto_backup()
+        super().closeEvent(event)
+
     def excel_path(self):
         saved = self.db.get_setting("excel_path")
         if saved:
@@ -3439,6 +3526,7 @@ class MainWindow(QMainWindow):
             return False
         if hasattr(self, "settings"):
             self.settings.excel.setText(path)
+        self.auto_backup()
         return True
 
     def _tab_changed(self, i):
