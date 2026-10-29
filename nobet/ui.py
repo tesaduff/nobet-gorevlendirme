@@ -331,6 +331,32 @@ def keep_still(*views):
         v.installEventFilter(_still)
 
 
+def fit_day_document(plan, info, has_logo, schedule):
+    """Görevlendirme belgesini ana çizelge (imzalar dahil) mümkün olduğunca TEK sayfaya
+    sığacak şekilde hazırlar: sığmazsa yazı ve boşluklar adım adım küçültülür. İmzalar hep
+    tabloların hemen altında kalır; öğretmen programları sonraki sayfadan başlar."""
+    chosen = None
+    for scale in (1.0, 0.92, 0.85, 0.78, 0.7, 0.62, 0.55):
+        doc = keep_together(lambda breaks, sc=scale: export.day_html(
+            plan, info, has_logo, schedule, breaks, sc))
+        layout = doc.documentLayout()
+        doc.pageCount()
+        page = doc.pageSize().height()
+        end = None
+        block = doc.begin()
+        while block.isValid():
+            if export.SECTION_END in block.text():
+                end = layout.blockBoundingRect(block).bottom()
+                break
+            block = block.next()
+        pages = int(((end or 0) - 1) // page) + 1 if end else 1
+        if chosen is None or pages < chosen[0]:
+            chosen = (pages, doc)
+        if pages == 1:
+            break
+    return chosen[1]
+
+
 def run_dialog(dlg):
     """Pencereyi açar; kapanınca belleği bırakır (açık kalan eski pencereler programı ve tema
     değişimini yavaşlatır). Silme olay döngüsüne dönülünce yapılır, sonuçlar okunabilir."""
@@ -371,12 +397,18 @@ class Worker(QThread):
             self.failed.emit(str(e))
 
 
+def needs_class(info):
+    """Sınıfı olması gereken ama yazılmamış ders mi? "DESTEK" dersleri belgede sınıfsız
+    yazılır; olduğu gibi bırakılır, eksik sayılmaz."""
+    return bool(info) and not split_info(info)[0] and "destek" not in normalize(info)
+
+
 def missing_class(data):
     """Sınıfı okunamayan dersler: {öğretmen: [(gün, saat, bilgi), ...]}."""
     out = {}
     for t, slots in data.items():
         for (d, h), info in sorted(slots.items()):
-            if info and not split_info(info)[0]:
+            if needs_class(info):
                 out.setdefault(t, []).append((d, h, info))
     return out
 
@@ -389,7 +421,7 @@ def missing_class_text(data):
     kinds = sorted({i for v in miss.values() for _d, _h, i in v})
     return (f"⚠ <b>{n} derste sınıf yazmıyor</b> ({len(miss)} öğretmen; ör. "
             f"{', '.join(kinds[:3])}). PDF'te bu hücrelerde sınıf adı yok. Sarı hücrelere çift "
-            "tıklayıp sınıfı ekleyebilirsiniz (ör. <i>6/A DESTEK</i>).")
+            "tıklayıp sınıfı ekleyebilirsiniz (ör. <i>6/A BİLG.</i>).")
 
 
 class WeekGrid(QTableWidget):
@@ -412,9 +444,9 @@ class WeekGrid(QTableWidget):
         if not text:
             it.setBackground(QColor(0, 0, 0, 0))
             it.setToolTip("")
-        elif not split_info(text)[0]:
+        elif needs_class(text):
             it.setBackground(YELLOW)
-            it.setToolTip("Sınıf yazmıyor — çift tıklayıp sınıfı ekleyin (ör. 6/A DESTEK)")
+            it.setToolTip("Sınıf yazmıyor — çift tıklayıp sınıfı ekleyin (ör. 6/A BİLG.)")
         else:
             it.setBackground(GREEN)
             it.setToolTip("")
@@ -428,9 +460,9 @@ class WeekGrid(QTableWidget):
         for (d, h), info in slots.items():
             if 0 <= d < 5 and h >= 1:
                 it = _item(info, self.editable)
-                if info and not split_info(info)[0]:
+                if needs_class(info):
                     it.setBackground(YELLOW)   # sınıf okunamadı
-                    it.setToolTip("Sınıf yazmıyor — çift tıklayıp sınıfı ekleyin (ör. 6/A DESTEK)")
+                    it.setToolTip("Sınıf yazmıyor — çift tıklayıp sınıfı ekleyin (ör. 6/A BİLG.)")
                 else:
                     it.setBackground(GREEN)
                 self.setItem(h - 1, d, it)
@@ -506,7 +538,8 @@ class ScheduleReviewDialog(QDialog):
                             f"{layouts}<br>Yanlış okunan isimleri çift tıklayıp düzeltin. Aynı "
                             "ada çevrilen satırlar birleştirilir.<br><b>Sarı</b> öğretmen / "
                             "hücre: sınıf yazmıyor — sağdaki programda hücreye çift tıklayıp "
-                            "sınıfı ekleyin (ör. <i>6/A DESTEK</i>); düzelince sarı kalkar.")
+                            "sınıfı ekleyin (ör. <i>6/A BİLG.</i>); düzelince sarı kalkar. "
+                            "<i>DESTEK</i> dersleri belgede sınıfsız yazılır; olduğu gibi kalır.")
         info_lbl.setWordWrap(True)
         lv.addWidget(info_lbl)
         lv.addWidget(self.table)
@@ -1560,9 +1593,10 @@ class DailyTab(QWidget):
                 self.gaps.insertRow(r)
                 self.gap_rows[r] = (t, h)
                 self.gaps.setItem(r, 0, _item(f"{h}. ders"))
-                c_it = _item(sinif or "✎ seçin")
+                destek = "destek" in normalize(ders or "")
+                c_it = _item(sinif or ("—" if destek else "✎ seçin"))
                 d_it = _item(lesson_label(ders) or "✎ yazın")
-                for it, empty in ((c_it, not sinif), (d_it, not ders)):
+                for it, empty in ((c_it, not sinif and not destek), (d_it, not ders)):
                     it.setToolTip("Düzeltmek için tıklayın")
                     if empty:
                         it.setBackground(YELLOW)
@@ -1605,7 +1639,7 @@ class DailyTab(QWidget):
         self.dutyt.setColumnWidth(2, max(120, 20 + len(need) * (HourStripDelegate.BOX +
                                                                 HourStripDelegate.GAP)))
         self._fill_jokers()
-        missing = any(not split_info(self.schedule[t].get((wd, h), "") or "")[0]
+        missing = any(needs_class(self.schedule[t].get((wd, h), "") or "")
                       for t, h in self.gap_rows.values())
         self.gaps_box.setTitle(f"Boş kalan dersler — {total} ders" +
                                (" · sarıya tıklayıp düzeltin" if missing else ""))
@@ -2043,8 +2077,8 @@ class DailyTab(QWidget):
             return
         self._ensure_approved()
         # Öğretmen programı satırları sayfa arasında bölünmesin
-        doc = keep_together(lambda breaks: export.day_html(
-            self.plan, self.win.school_info(), os.path.exists(logo_path()), self.schedule, breaks))
+        doc = fit_day_document(self.plan, self.win.school_info(), os.path.exists(logo_path()),
+                               self.schedule)
         preview(self, doc, f"gorevlendirme_{self.date_iso()}.pdf")
 
 

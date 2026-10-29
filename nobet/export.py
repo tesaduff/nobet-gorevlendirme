@@ -94,10 +94,16 @@ def programs_html(plan, schedule, breaks=()):
             + f"<p style='margin:0'>{MARK}</p>")
 
 
-def day_html(plan, info=None, has_logo=False, schedule=None, breaks=()):
+def day_html(plan, info=None, has_logo=False, schedule=None, breaks=(), scale=1.0):
     """Yazdırılacak resmî görevlendirme çizelgesi (A4 dikey). schedule verilirse ikinci
-    sayfada görevlendirilen öğretmenlerin o günkü programı da yer alır."""
+    sayfada görevlendirilen öğretmenlerin o günkü programı da yer alır.
+
+    scale: yazı ve hücre boşluğu ölçeği (1 = normal); imzalar tabloların hemen altında,
+    aynı sayfada kalsın diye sığmadığında küçültülür (bkz. ui.fit_day_document)."""
     e = html.escape
+    pad = max(1, round(5 * scale))
+    fs = round(9 * scale, 1)
+    fs_small = round(7 * scale, 1)
     info = info if isinstance(info, dict) else {"school": info or ""}
     school = info.get("school", "")
     city = info.get("school_city", "")
@@ -120,39 +126,42 @@ def day_html(plan, info=None, has_logo=False, schedule=None, breaks=()):
                 f"<tr style='background:{color}'><td align=center width=9%><b>{a.hour}. ders</b></td>"
                 f"<td align=center width=12%>{e(sinif) or '—'}</td><td width=22%>{e(ders or a.info)}</td>"
                 f"<td><b>{e(a.assigned or '— atanmadı —')}</b>"
-                + (f"<br><span style='color:#92400e; font-size:7pt'>{note}</span>" if note else "") +
+                + (f"<br><span style='color:#92400e; font-size:{fs_small}pt'>{note}</span>"
+                   if note else "") +
                 "</td><td width=18%></td></tr>")
         # Her gelmeyen öğretmenin tablosu ayrı; aralarında bir satır boşluk olur
         tables.append(
-            "<table border=1 cellspacing=0 cellpadding=5 width=100% "
+            f"<table border=1 cellspacing=0 cellpadding={pad} width=100% "
             "style='border-collapse:collapse'>"
             "<tr style='background:#cbd5e1'><th>Saat</th><th>Sınıf</th><th>Ders</th>"
             "<th>Derse Girecek Öğretmen</th><th>İmza</th></tr>" + "".join(rows) + "</table>")
     duty = ", ".join(f"{e(t)}" + (f" ({e(p)})" if p else "") for t, p in plan.duty) or "—"
-    logo = "<img src='logo' height=70>" if has_logo else ""
+    logo = f"<img src='logo' height={max(30, round(70 * scale))}>" if has_logo else ""
     head = "<br>".join(x for x in ("T.C.", e(city), f"<b>{e(school)}</b>") if x)
     sign = []
     for title, key in (("Müdür Yardımcısı", "vice_principal"), ("Okul Müdürü", "principal")):
         name = (info.get(key, "") or "").replace(";", ",").split(",")[0].strip()
         sign.append(f"<td align=center width=40%>{e(name) or '&nbsp;'}<br>"
-                    f"<b>{title}</b><br><br>İmza</td>")
+                    f"<b>{title}</b><br>İmza</td>")
+    gap = "<p style='margin:0; font-size:%spt'>&nbsp;</p>" % max(3, round(8 * scale))
     return f"""
-<html><body style="font-family:'Segoe UI', Arial; font-size:9pt; color:#111">
+<html><body style="font-family:'Segoe UI', Arial; font-size:{fs}pt; color:#111">
 <table width=100% cellspacing=0 cellpadding=0><tr>
 <td width=15% valign=middle>{logo}</td>
-<td align=center valign=middle style="font-size:10pt">{head}</td>
+<td align=center valign=middle style="font-size:{round(10 * scale, 1)}pt">{head}</td>
 <td width=15%></td></tr></table>
-<h3 align=center style="margin-top:8px">DERS GÖREVLENDİRME ÇİZELGESİ</h3>
-<p align=center style="font-size:10pt"><b>{e(date_tr(plan.date))}</b></p>
-<table width=100% cellspacing=0 cellpadding=3 style="font-size:8.5pt">
+<h3 align=center style="margin:{round(6 * scale)}px 0 0 0">DERS GÖREVLENDİRME ÇİZELGESİ</h3>
+<p align=center style="font-size:{round(10 * scale, 1)}pt; margin:2px 0 4px 0"><b>{e(date_tr(plan.date))}</b></p>
+<table width=100% cellspacing=0 cellpadding=2 style="font-size:{round(8.5 * scale, 1)}pt">
 <tr><td width=22%><b>Nöbetçi öğretmenler:</b></td><td>{duty}</td></tr></table>
-<br>
-{'<p style="margin:0">&nbsp;</p>'.join(tables) or '<p align=center>Görevlendirme yok</p>'}
-<p style="font-size:8pt; color:#475569">Yukarıda adı geçen öğretmenler belirtilen ders saatlerinde
-ilgili sınıflarda görevlendirilmiştir. Mor satırlar joker öğretmenlere, sarı satırlar nöbetçi
-olmayan diğer öğretmenlere verilen derslerdir.</p>
-<br><br>
+{gap}
+{gap.join(tables) or '<p align=center>Görevlendirme yok</p>'}
+<p style="font-size:{fs_small}pt; color:#475569; margin:4px 0">Yukarıda adı geçen öğretmenler
+belirtilen ders saatlerinde ilgili sınıflarda görevlendirilmiştir. Mor satırlar joker
+öğretmenlere, sarı satırlar nöbetçi olmayan diğer öğretmenlere verilen derslerdir.</p>
+{gap}
 <table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
+<p style="margin:0; font-size:1pt">{SECTION_END}</p>
 {programs_html(plan, schedule, breaks) if schedule else ""}
 </body></html>"""
 
@@ -346,6 +355,7 @@ def write_records_xlsx(path, db, school=""):
 
 
 MARK = "\u2063"   # görünmez işaret: sayfalamada bölüm sınırlarını bulmak için
+SECTION_END = "\u2064"   # ana çizelgenin (imzalar dahil) bittiği yeri ölçmek için
 
 
 def duty_html(month, entries, info=None, has_logo=False, exempt=None, places=None, breaks=()):

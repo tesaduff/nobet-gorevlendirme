@@ -1,4 +1,16 @@
-Sürüm 2.6.2
+Sürüm 2.7.0
+
+Ders programı okuma (yeniden yazıldı, güçlendirildi):
+- İki satırlı küçük yazılar artık birbirine karışmaz: "MAT. ve BİL. UYG." gibi dersler eskiden "MAT. veU BYİGL.." diye bozuk okunuyordu (14 hücre); doğru okunur
+- Blok dersler (2-3 saatlik, tek dikdörtgen; öğle arasını aşanlar dahil) ve yazısı iki hücreye bölünmüş dersler sınıfıyla birlikte birleştirilir; yanındaki saatte aynı ders sınıfla yazılıysa eksik sınıf tamamlanır
+- Okuma kendini denetler: belgede her öğretmenin satırı sonunda yazan haftalık ders saati okunan saatle karşılaştırılır; PDF'te görünen bir sınıf okunamadıysa uyarı verir. Okulunuzun programında 62 öğretmenin hepsinin saat toplamı belgeyle tutuyor
+- Ders adları belgede nasıl yazıyorsa öyle gösterilir (DESTEK, BİLG., B.EĞT. …); "DESTEK" dersleri belgede sınıfsız yazıldığı için olduğu gibi kalır, eksik sayılmaz. Diğer derslerde sınıf yoksa sarı işaretlenir, elle girilir
+
+Görevlendirme baskısı:
+- Ana çizelge ve imzalar mümkün olduğunca tek sayfaya sığdırılır (sığmazsa yazı ve boşluklar otomatik küçülür); imzalar hep tabloların hemen altında kalır
+- Görevlendirme satırlarında tekrarlayan uzun notlar kaldırıldı
+
+Sürüm 2.6.2'deki yenilikler
 
 - Kayıtlarda nöbetçi olmayan ama o saatte boş olan öğretmenin yanında da açıklama yazar: "(nöbetçi değil, o saatte boş)"; joker öğretmenlerde "(joker)" yazmaya devam eder
 

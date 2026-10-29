@@ -47,7 +47,8 @@ def _read_pdf(path):
                     except Exception:
                         found = []
                     for tf in found:
-                        data = tf.extract()
+                        # Küçük yazılı iki satır birbirine karışmasın (ör. "MAT. ve BİL. / UYG.")
+                        data = tf.extract(y_tolerance=1, x_tolerance=1.5)
                         if not data or len(data) < 2 or max(len(r) for r in data) < 3:
                             continue
                         data = [[_cell_raw(c) for c in row] for row in data]
@@ -56,7 +57,12 @@ def _read_pdf(path):
                         tables.append(data)
                     if tables:
                         break
-                pages.append({"text": text, "tables": tables})
+                notes = []
+                try:
+                    notes = _audit_classes(page)
+                except Exception:  # noqa: BLE001 — denetim başarısızsa okuma yine de sürer
+                    notes = []
+                pages.append({"text": text, "tables": tables, "notes": notes})
     except ReadError:
         raise
     except Exception as e:
@@ -65,6 +71,41 @@ def _read_pdf(path):
         raise ReadError("PDF'te okunabilir metin yok. Belge taranmış (resim) olabilir; "
                         "e-Okul/MEBBİS'ten PDF veya Excel olarak yeniden indirin.")
     return pages
+
+
+def _audit_classes(page):
+    """Okumayı belgeyle karşılaştırır: her öğretmen satırında PDF'te yazan sınıf adları,
+    okunan hücrelerde de bulunmalı. Bulunmayan sınıf varsa uyarı döner."""
+    import re
+    notes = []
+    class_re = re.compile(r"(?<![\w/])(\d{1,2}\s*[-/.]?\s*[A-ZÇĞİÖŞÜ])(?![\wçğıöşü])")
+    for tf in page.find_tables():
+        data = tf.extract(y_tolerance=1, x_tolerance=1.5)
+        for ri, row in enumerate(tf.rows):
+            if ri >= len(data) or not data[ri] or not data[ri][0]:
+                continue
+            name = str(data[ri][0]).replace("\n", " ").strip()
+            last = [str(c or "").strip() for c in data[ri]][-1]
+            if not last.isdigit():
+                continue                                  # öğretmen satırı değil
+            cells = [c for c in row.cells if c]
+            if len(cells) < 3:
+                continue
+            x0, x1 = cells[0][2], cells[-1][0]
+            words = page.within_bbox(row.bbox).extract_words(y_tolerance=1, x_tolerance=1.5)
+            body = " ".join(w["text"] for w in words if w["x0"] >= x0 - 1 and w["x1"] <= x1 + 1)
+            in_pdf = {m.group(1).replace(" ", "") for m in class_re.finditer(body)}
+            # Yan yana yapışık sınıflar ("5A5G") ayrı sayılır
+            for w in words:
+                for m in re.finditer(r"\d{1,2}\s*[/.-]?\s*[A-ZÇĞİÖŞÜ](?![a-zçğıöşü])", w["text"]):
+                    in_pdf.add(m.group(0).replace(" ", ""))
+            seen = " ".join(str(c or "") for c in data[ri][1:-1])
+            in_cells = {m.group(0).replace(" ", "") for m in
+                        re.finditer(r"\d{1,2}\s*[/.-]?\s*[A-ZÇĞİÖŞÜ](?![a-zçğıöşü])", seen)}
+            lost = sorted(in_pdf - in_cells)
+            if lost:
+                notes.append(f"⚠ {name}: belgede görünen sınıf(lar) okunamadı: {', '.join(lost)}")
+    return notes
 
 
 def _merge_box_spans(data, tf, page):
@@ -100,7 +141,7 @@ def _merge_box_spans(data, tf, page):
             try:
                 box = page.within_bbox((r["x0"] - 0.5, r["top"] - 0.5, r["x1"] + 0.5,
                                         r["bottom"] + 0.5))
-                merged = (box.extract_text() or "").strip()
+                merged = (box.extract_text(y_tolerance=1, x_tolerance=1.5) or "").strip()
             except Exception:
                 merged = ""
             merged = merged or " ".join(texts)

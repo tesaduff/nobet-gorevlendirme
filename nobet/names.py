@@ -189,17 +189,6 @@ def split_info(info):
 
 
 def lesson_label(ders):
-    """Ekranda ve çıktıda gösterilecek ders adı: 'DESTEK' → 'Destek dersi',
-    'İİNG. DESTEK' → 'İngilizce destek dersi' (PDF'teki yazım hataları da düzeltilir)."""
-    text = (ders or "").strip()
-    if not text:
-        return ""
-    text = text.replace("İİNG", "İNG").replace("IING", "ING")
-    up = text.upper()
-    if "DESTEK" in up:
-        rest = up.replace("DESTEK", "").strip(" .-")
-        names = {"İNG": "İngilizce", "ING": "İngilizce", "MAT": "Matematik", "TÜR": "Türkçe",
-                 "FEN": "Fen"}
-        prefix = names.get(rest.rstrip("."), rest.title() if rest else "")
-        return (prefix + " destek dersi").strip().capitalize() if prefix else "Destek dersi"
-    return text
+    """Ders adı belgede nasıl yazıyorsa öyle gösterilir ("DESTEK", "BİLG." …); yalnızca
+    fazla boşluklar temizlenir."""
+    return re.sub(r"\s+", " ", str(ders or "")).strip()

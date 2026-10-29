@@ -121,12 +121,11 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         if free_joker:
             pick = min(free_joker, key=fairness)
             a.assigned, a.kind = pick, "joker"
-            a.note = "Joker öğretmen (önce joker öğretmenlerin 7 saati doldurulur)."
+            a.note = ""
         elif under_cap:
             pick = min(under_cap, key=fairness)
             a.assigned, a.kind = pick, "nobetci"
-            a.note = ("Joker öğretmen bu saatte başka bir sınıfta veya 7 dersini doldurdu."
-                      if joker_names else "")
+            a.note = ""
         elif free_other:
             # Diğer öğretmenlerde de istatistik esastır: bu yıl en az derse giren önce seçilir;
             # eşitlikte iki dersi arasında boşluğu olan tercih edilir.

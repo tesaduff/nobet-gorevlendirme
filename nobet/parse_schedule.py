@@ -191,6 +191,7 @@ def parse_schedule(pages, known_teachers=()):
     unknown = 0
     for p_idx, page in enumerate(pages, start=1):
         owner, kind = page_owner(page.get("text", ""))
+        res.warnings.extend(n for n in page.get("notes", []) if n not in res.warnings)
         for table in page.get("tables", []):
             if not table:
                 continue
@@ -322,6 +323,15 @@ def _parse_carsaf_rows(grid, start, col_day, hours, res, matcher, p_idx):
             if len(normalize(label).split()) < 2:
                 continue
         prev = None
+        total = None                      # satır sonunda yazılı haftalık ders saati
+        for c in reversed(label_cols):
+            t = _txt(row[c])
+            if t.isdigit() and 0 < int(t) <= 60:
+                total = int(t)
+                break
+            if t:
+                break
+        before = len(res.teachers.get(clean_name(label), {}))
         for c, d in enumerate(col_day):
             v = row[c]
             # Birleştirilmiş hücre (blok ders): soldaki hücrenin dersi aynı gün içinde devam eder.
@@ -331,6 +341,10 @@ def _parse_carsaf_rows(grid, start, col_day, hours, res, matcher, p_idx):
             if d is None or not hours[c]:
                 continue
             _emit(res, clean_name(label), kind, d, hours[c], v, matcher)
+        read = len(res.teachers.get(clean_name(label), {})) - before
+        if kind == "teacher" and total is not None and read != total:
+            res.warnings.append(f"⚠ {clean_name(label)}: belgede haftalık {total} saat yazıyor, "
+                                f"{read} saat okunabildi — programı kontrol edin.")
 
 
 def _parse_days_in_rows(grid, owner, kind, res, matcher, p_idx):
@@ -392,17 +406,31 @@ def _parse_days_in_rows(grid, owner, kind, res, matcher, p_idx):
 
 
 def _join_split_blocks(res):
-    """Ardışık iki saatte biri yalnızca sınıf, diğeri yalnızca ders adıysa (blok dersin yazısı
-    iki hücreye bölünmüş) ikisini de "sınıf ders" yapar: "TÜRKÇE" + "5A" -> "5A TÜRKÇE"."""
+    """Blok dersin yazısı iki hücreye bölünmüş olabilir: biri yalnızca sınıf, öteki yalnızca
+    ders adı ("BİLG." + "6/E"). Ardışık saatlerde (öğle arası saat sayılmaz) ikisini de
+    "sınıf ders" yapar. Ayrıca sınıfı olmayan bir derse, yanındaki saatte aynı ders adı sınıfla
+    birlikte yazılıysa o sınıf eklenir (3 saatlik bloklar dahil)."""
     from .names import split_info
     for slots in res.teachers.values():
-        for (d, h) in sorted(slots):
-            nxt = (d, h + 1)
-            if nxt not in slots:
-                continue
-            c1, l1 = split_info(slots[(d, h)])
-            c2, l2 = split_info(slots[nxt])
-            if c1 and not l1 and l2 and not c2:
-                slots[(d, h)] = slots[nxt] = f"{c1} {l2}"
-            elif l1 and not c1 and c2 and not l2:
-                slots[(d, h)] = slots[nxt] = f"{c2} {l1}"
+        for _ in range(3):                        # 3 saatlik bloklar için birkaç tur
+            changed = False
+            for (d, h) in sorted(slots):
+                nxt = (d, h + 1)
+                if nxt not in slots:
+                    continue
+                c1, l1 = split_info(slots[(d, h)])
+                c2, l2 = split_info(slots[nxt])
+                if c1 and not l1 and l2 and not c2:
+                    slots[(d, h)] = slots[nxt] = f"{c1} {l2}"
+                    changed = True
+                elif l1 and not c1 and c2 and not l2:
+                    slots[(d, h)] = slots[nxt] = f"{c2} {l1}"
+                    changed = True
+                elif l1 and l2 and normalize(l1) == normalize(l2) and bool(c1) != bool(c2) \
+                        and "destek" not in normalize(l1):
+                    # Aynı ders ardışık iki saatte, birinde sınıf var biri yok: blok dersin parçası
+                    cls = c1 or c2
+                    slots[(d, h)] = slots[nxt] = f"{cls} {l1}"
+                    changed = True
+            if not changed:
+                break

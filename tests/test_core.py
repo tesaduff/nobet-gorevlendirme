@@ -680,3 +680,17 @@ def test_joker_filled_before_duty_teachers():
                     jokers=["J"])
     by_kind = [a.kind for a in sorted(plan.assignments, key=lambda a: a.hour)]
     assert by_kind.count("joker") == JOKER_MAX and by_kind[-1] == "nobetci"
+
+
+def test_join_split_blocks_and_destek_expected_without_class():
+    from nobet.parse_schedule import ScheduleResult, _join_split_blocks
+    from nobet.ui import needs_class
+    res = ScheduleResult()
+    res.teachers["A"] = {(0, 1): "BİLG.", (0, 2): "6/E", (1, 3): "5A MAT.", (1, 4): "MAT.",
+                         (2, 1): "DESTEK", (2, 2): "6/A DESTEK"}
+    _join_split_blocks(res)
+    s = res.teachers["A"]
+    assert s[(0, 1)] == s[(0, 2)] == "6/E BİLG."
+    assert s[(1, 3)] == s[(1, 4)] == "5A MAT."
+    assert s[(2, 1)] == "DESTEK"            # destek dersine sınıf kopyalanmaz
+    assert not needs_class("DESTEK") and needs_class("FEN") and not needs_class("6/A FEN")
