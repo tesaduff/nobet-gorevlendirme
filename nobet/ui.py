@@ -660,6 +660,7 @@ def keep_together(make_html, landscape=False):
         page = doc.pageSize().height()
         # Üst düzeydeki bloklar ve tablolar sırayla: her MARK yeni bir bölüm başlatır
         spans = []           # [üst, alt] her bölüm için
+        opened = False
         it = doc.rootFrame().begin()
         while not it.atEnd():
             frame, block = it.currentFrame(), it.currentBlock()
@@ -669,7 +670,10 @@ def keep_together(make_html, landscape=False):
                 rect = layout.blockBoundingRect(block)
                 if export.MARK in block.text():
                     spans.append([rect.top(), rect.bottom()])
-            if spans and rect.height() > 0:
+                    opened = True
+                elif export.SECTION_END in block.text():
+                    opened = False        # ana çizelge bitti; sonrası son bölüme eklenmez
+            if opened and spans and rect.height() > 0:
                 spans[-1][1] = max(spans[-1][1], rect.bottom())
             it += 1
         moved = False

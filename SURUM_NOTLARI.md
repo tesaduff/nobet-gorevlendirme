@@ -1,4 +1,8 @@
-Sürüm 2.7.0
+Sürüm 2.7.1
+
+- Görevlendirme baskısında bir öğretmenin tablosu artık sayfa arasında bölünmez: başlık satırı bir sayfada, dersleri öbür sayfada kalmaz; sığmayan tablo başlığıyla birlikte bütünüyle sonraki sayfaya geçer
+
+Sürüm 2.7.0'daki yenilikler
 
 Ders programı okuma (yeniden yazıldı, güçlendirildi):
 - İki satırlı küçük yazılar artık birbirine karışmaz: "MAT. ve BİL. UYG." gibi dersler eskiden "MAT. veU BYİGL.." diye bozuk okunuyordu (14 hücre); doğru okunur

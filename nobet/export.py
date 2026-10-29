@@ -129,8 +129,12 @@ def day_html(plan, info=None, has_logo=False, schedule=None, breaks=(), scale=1.
                 + (f"<br><span style='color:#92400e; font-size:{fs_small}pt'>{note}</span>"
                    if note else "") +
                 "</td><td width=18%></td></tr>")
-        # Her gelmeyen öğretmenin tablosu ayrı; aralarında bir satır boşluk olur
+        # Her gelmeyen öğretmenin tablosu ayrı; aralarında bir satır boşluk olur. Başında
+        # görünmez işaret var: tablo sayfa arasında bölünecekse bütünüyle sonraki sayfaya geçer.
+        idx = len(tables)
+        brk = "; page-break-before:always" if idx in breaks else ""
         tables.append(
+            f"<p style='margin:0; font-size:1pt{brk}'>{MARK}</p>"
             f"<table border=1 cellspacing=0 cellpadding={pad} width=100% "
             "style='border-collapse:collapse'>"
             "<tr style='background:#cbd5e1'><th>Saat</th><th>Sınıf</th><th>Ders</th>"
@@ -144,6 +148,8 @@ def day_html(plan, info=None, has_logo=False, schedule=None, breaks=(), scale=1.
         sign.append(f"<td align=center width=40%>{e(name) or '&nbsp;'}<br>"
                     f"<b>{title}</b><br>İmza</td>")
     gap = "<p style='margin:0; font-size:%spt'>&nbsp;</p>" % max(3, round(8 * scale))
+    n_tables = len(tables)
+    prog_breaks = {b - n_tables for b in breaks if b >= n_tables}
     return f"""
 <html><body style="font-family:'Segoe UI', Arial; font-size:{fs}pt; color:#111">
 <table width=100% cellspacing=0 cellpadding=0><tr>
@@ -162,7 +168,7 @@ belirtilen ders saatlerinde ilgili sınıflarda görevlendirilmiştir. Mor satı
 {gap}
 <table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
 <p style="margin:0; font-size:1pt">{SECTION_END}</p>
-{programs_html(plan, schedule, breaks) if schedule else ""}
+{(programs_html(plan, schedule, prog_breaks) if schedule else "") or f"<p style='margin:0; font-size:1pt'>{MARK}</p>"}
 </body></html>"""
 
 
