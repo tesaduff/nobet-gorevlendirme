@@ -320,6 +320,10 @@ def keep_still(*views):
     if _still is None:
         _still = _StillFilter()
     for v in views:
+        if hasattr(v, "setAutoScroll"):
+            v.setAutoScroll(False)          # fare kenara gelince liste kendiliğinden kaymasın
+        if hasattr(v, "setDragEnabled"):
+            v.setDragEnabled(False)
         target = v.viewport() if hasattr(v, "viewport") else v
         target.setMouseTracking(False)
         target.setAttribute(Qt.WA_Hover, False)
@@ -336,6 +340,8 @@ def run_dialog(dlg):
 
 
 def _stretch(table, *cols):
+    # Fare / dokunmatik fare kenara yaklaşınca tablo kendiliğinden kaymasın
+    table.setAutoScroll(False)
     table.setAlternatingRowColors(True)
     table.verticalHeader().setDefaultSectionSize(theme.ROW_HEIGHT)
     table.setShowGrid(False)

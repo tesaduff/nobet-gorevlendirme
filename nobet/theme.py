@@ -4,7 +4,7 @@ import sys
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPixmap
-from PySide6.QtWidgets import (QAbstractScrollArea, QAbstractSpinBox, QComboBox, QFrame,
+from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstractSpinBox, QComboBox, QFrame,
                                QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow,
                                QPushButton, QScrollArea,
                                QStackedWidget, QVBoxLayout, QWidget)
@@ -362,6 +362,9 @@ class WheelGuard(QObject):
     uygular."""
 
     def eventFilter(self, obj, event):
+        if event.type() == QEvent.Show and isinstance(obj, QAbstractItemView) and \
+                obj.hasAutoScroll():
+            obj.setAutoScroll(False)        # fare kenara gelince kendiliğinden kaymasın
         if event.type() == QEvent.Show and isinstance(obj, QWidget):
             if obj.property("themeRoot"):
                 _restyle(obj)

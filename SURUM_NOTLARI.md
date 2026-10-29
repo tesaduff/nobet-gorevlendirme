@@ -1,4 +1,8 @@
-Sürüm 2.6.0
+Sürüm 2.6.1
+
+- Fare (veya dokunmatik fare) aşağı-yukarı hareket ettirildiğinde öğretmen listeleri ve tablolar kendiliğinden kaymaz; liste yalnızca tekerlek ya da kaydırma çubuğuyla kayar
+
+Sürüm 2.6.0'daki yenilikler
 
 - Yeni görevlendirme sırası: 1) önce joker öğretmenler — 7 saati dolana kadar (joker o gün derssiz sayılır), 2) sonra o saatte boş nöbetçiler, 3) en son o saatte dersi olmayan diğer öğretmenler
 - Gelmeyen öğretmenin adının yanında o gün kaç saat dersi ve kaç saat boşu olduğu yazar (ör. "7 saat ders, 0 saat boş")
