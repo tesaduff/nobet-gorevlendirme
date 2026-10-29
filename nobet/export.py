@@ -2,7 +2,7 @@
 import datetime as dt
 import html
 
-from .names import DAYS, normalize, split_info
+from .names import DAYS, lesson_label, normalize, split_info
 from .scheduler import KIND_LABELS
 
 
@@ -39,6 +39,7 @@ def day_html(plan, info=None, has_logo=False):
         for a in items:
             color = {"bos": "#fff6db", "yok": "#fde7e7"}.get(a.kind, "#ffffff")
             sinif, ders = split_info(a.info)
+            ders = lesson_label(ders)
             note = e(a.note.replace("⚠ ", "")) if a.note else ""
             rows.append(
                 f"<tr style='background:{color}'><td align=center width=9%><b>{a.hour}. ders</b></td>"
@@ -96,6 +97,7 @@ def save_day_xlsx(path, plan, school=""):
     fills = {"bos": PatternFill("solid", fgColor="FFF4CC"), "yok": PatternFill("solid", fgColor="FFD6D6")}
     for a in plan.assignments:
         sinif, ders = split_info(a.info)
+        ders = lesson_label(ders)
         ws.append([a.absent, plan.absences.get(a.absent, ""), f"{a.hour}. ders", sinif, ders or a.info,
                    a.assigned or "—", KIND_LABELS.get(a.kind, a.kind), a.note, ""])
         if a.kind in fills:
@@ -205,6 +207,7 @@ def write_records_xlsx(path, db, school=""):
     for date, hour, absent, reason, info, assigned, kind, note in rows:
         d = dt.date.fromisoformat(date)
         sinif, ders = split_info(info)
+        ders = lesson_label(ders)
         ws.append([d, DAYS[d.weekday()] if d.weekday() < 5 else "", hour, absent, reason or "",
                    sinif, ders or info or "", assigned or "—", KIND_LABELS.get(kind, kind or ""),
                    note or ""])

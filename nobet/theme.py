@@ -103,6 +103,27 @@ QGroupBox::title {{
     background: transparent;
 }}
 QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px; }}
+QFrame#jokerCard {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a_soft}, stop:1 {CARD});
+    border: 1px solid {a}; border-left: 5px solid {a}; border-radius: {R2}px;
+}}
+QPushButton#chip {{
+    background: {a}; color: white; border: none; border-radius: 13px; padding: 4px 12px;
+    font-weight: 600;
+}}
+QPushButton#chip:hover {{ background: #dc2626; }}
+QLabel#okMsg {{ color: #15803d; font-weight: 600; }}
+QListWidget#absentList {{
+    background: transparent; border: none; outline: none;
+}}
+QListWidget#absentList::item {{
+    background: {CARD}; border: 1px solid {BORDER}; border-left: 5px solid #f87171;
+    border-radius: {R}px; padding: 10px 12px; margin: 0 0 8px 0; color: {TEXT};
+}}
+QListWidget#absentList::item:selected {{
+    background: {a}; color: white; border-color: {a}; border-left: 5px solid {a_hover};
+}}
+QListWidget#absentList::item:hover {{ border-color: {a}; }}
 QLabel#warnBox {{
     background: {WARN_BG}; color: {WARN_TEXT}; border: 1px solid {WARN_BORDER};
     border-radius: {R}px; padding: 8px 12px;
@@ -213,7 +234,7 @@ QTableWidget, QListWidget#list {{
     selection-background-color: {a_soft}; selection-color: {TEXT};
 }}
 QHeaderView::section {{
-    background: {HEAD}; color: {MUTED}; border: none; border-bottom: 1px solid {BORDER};
+    background: {a_soft}; color: {a}; border: none; border-bottom: 2px solid {a};
     padding: 7px 3px; font-weight: 600;
 }}
 QTableCornerButton::section {{ background: {HEAD}; border: none; }}
@@ -260,9 +281,12 @@ QListWidget#nav::item:selected {{
 
 /* Sayfa başlıkları ve özet kutucukları */
 QFrame#header {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a_soft}, stop:1 {BG});
-    border: none; border-left: 5px solid {a}; border-radius: {R}px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a}, stop:0.7 {a_hover},
+                                stop:1 {side});
+    border: none; border-radius: {R2}px;
 }}
+QFrame#header QLabel#title {{ color: white; }}
+QFrame#header QLabel#subtitle {{ color: #e0e7ff; }}
 QLabel#title {{ font-size: 17pt; font-weight: 800; color: {a}; background: transparent; }}
 QLabel#subtitle {{ color: {MUTED}; background: transparent; }}
 QFrame#stat {{

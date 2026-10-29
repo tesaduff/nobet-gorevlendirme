@@ -1,4 +1,17 @@
-Sürüm 2.2.1
+Sürüm 2.3.0
+
+Görevlendirme:
+- Joker öğretmen bölümü yenilendi: adı yazıp Enter'a veya "Joker ekle"ye basın, "listeye eklendi" mesajı çıkar; eklenenler kutucuk olarak görünür, ✕ ile çıkarılır. Sıra: önce boş nöbetçiler, sonra joker öğretmenler, sonra diğer boş öğretmenler
+- Gelmeyen öğretmen seçildikten sonra sınıfı ya da dersi okunamayan dersler sarı görünür; tıklayıp sınıfı listeden seçin veya dersi yazın. Düzeltme ders programına da kaydedilir
+- Görevlendirme sonrası solda gelmeyen öğretmenler listelenir; bir öğretmene tıklayınca onun görevlendirmesi açılır
+- "DESTEK" dersleri "Destek dersi", "İİNG. DESTEK" "İngilizce destek dersi" olarak gösterilir (ekran, çıktı, Excel)
+
+Tasarım:
+- Renkli sayfa başlıkları, belirgin tablo başlıkları, dikkat çekici joker kartı
+
+Not: Okulunuzun PDF'inde destek derslerinin sınıfı hiç yazmıyor; bu dersleri yukarıdaki gibi bir kez elle düzeltmeniz yeterli, sonra hep doğru görünür.
+
+Sürüm 2.2.1'deki yenilikler
 
 - Görevlendirme 2. adımda her saat kutucuğunun altında "boş" veya "dolu" yazar: boş = nöbetçi o saatte derse girebilir, dolu = o saatte kendi dersi var (renkler de kalır)
 - Nöbetçiler tablosu daha geniş; adlar tek satırda

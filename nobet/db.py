@@ -126,6 +126,12 @@ class Database:
             out.setdefault(t, {})[(d, h)] = info
         return out
 
+    def update_slot(self, version_id, teacher, day, hour, info):
+        """Tek bir ders hücresini düzeltir (ör. sınıfı okunamayan ders)."""
+        self.conn.execute("INSERT OR REPLACE INTO schedule_entries VALUES (?,?,?,?,?)",
+                          (version_id, teacher, day, hour, info))
+        self.conn.commit()
+
     def replace_schedule_entries(self, version_id, teachers):
         self.conn.execute("DELETE FROM schedule_entries WHERE version_id=?", (version_id,))
         self.conn.executemany(
