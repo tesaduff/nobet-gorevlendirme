@@ -57,12 +57,16 @@ def _read_pdf(path):
                         tables.append(data)
                     if tables:
                         break
-                notes = []
+                notes, geo = [], {}
                 try:
                     notes = _audit_classes(page)
                 except Exception:  # noqa: BLE001 — denetim başarısızsa okuma yine de sürer
                     notes = []
-                pages.append({"text": text, "tables": tables, "notes": notes})
+                try:
+                    geo = geometry_cells(page)
+                except Exception:  # noqa: BLE001
+                    geo = {}
+                pages.append({"text": text, "tables": tables, "notes": notes, "geo": geo})
     except ReadError:
         raise
     except Exception as e:
@@ -71,6 +75,80 @@ def _read_pdf(path):
         raise ReadError("PDF'te okunabilir metin yok. Belge taranmış (resim) olabilir; "
                         "e-Okul/MEBBİS'ten PDF veya Excel olarak yeniden indirin.")
     return pages
+
+
+_DAY_KEYS = ["pazartesi", "sali", "carsamba", "persembe", "cuma"]
+
+
+def _norm(text):
+    table = str.maketrans("çğıöşüÇĞİÖŞÜâîû", "cgiosucgiosuaiu")
+    return str(text or "").translate(table).lower().strip()
+
+
+def geometry_cells(page):
+    """İkinci, bağımsız okuma: tablonun başlığındaki gün/saat sütunlarına bakarak her ders
+    kutusunu (tek dikdörtgene yazılmış 2-3 saatlik blok dahil) kapladığı bütün saatlere yayar.
+
+    Dönen: {öğretmen: {(gün, saat): "metin"}}. Çarşaf (öğretmen x gün/saat) tablosu yoksa boş.
+    """
+    out = {}
+    for tb in page.find_tables():
+        data = tb.extract(y_tolerance=1, x_tolerance=1.5)
+        if len(data) < 3:
+            continue
+        # Başlık: önce gün adları satırı, hemen altında saat numaraları satırı
+        hdr_i = next((i for i, r in enumerate(data[:4])
+                      if sum(1 for v in r if v and _norm(v) in _DAY_KEYS) >= 3), None)
+        if hdr_i is None or hdr_i + 1 >= len(data):
+            continue
+        dayrow, hourrow = data[hdr_i], data[hdr_i + 1]
+        coldefs, day = {}, None
+        for j, v in enumerate(dayrow):
+            if v and _norm(v) in _DAY_KEYS:
+                day = _DAY_KEYS.index(_norm(v))
+            h = hourrow[j] if j < len(hourrow) else None
+            if day is not None and h and str(h).strip().isdigit():
+                coldefs[j] = (day, int(str(h).strip()))
+        if len(coldefs) < 10:
+            continue
+        # Sütun kenarları: saat satırının hücreleri
+        full = [r for r in tb.rows if len([c for c in r.cells if c]) >= len(hourrow) - 3]
+        if not full:
+            continue
+        edges = list(full[0].cells)
+        name_cells = [c for c in tb.cells if abs(c[0] - tb.bbox[0]) < 1.5]
+        for (nx0, ntop, nx1, nbot) in name_cells:
+            if nbot - ntop < 4:
+                continue
+            words = page.within_bbox((nx0, ntop, nx1, nbot)).extract_words(
+                y_tolerance=1, x_tolerance=1.5)
+            name = " ".join(w["text"] for w in words).strip()
+            if len(name.split()) < 2 or any(ch.isdigit() for ch in name):
+                continue
+            height = nbot - ntop
+            rects = [r for r in page.rects if r["top"] >= ntop - 1 and r["bottom"] <= nbot + 1
+                     and (r["bottom"] - r["top"]) >= 0.6 * height]
+            body = page.within_bbox((nx1, ntop, tb.bbox[2], nbot)).extract_words(
+                y_tolerance=1, x_tolerance=1.5)
+            cells = {}
+            for j, (d, h) in coldefs.items():
+                e = edges[j] if j < len(edges) else None
+                if not e:
+                    continue
+                cx = (e[0] + e[2]) / 2
+                box = next((r for r in rects if r["x0"] - 0.6 <= cx <= r["x1"] + 0.6
+                            and (r["x1"] - r["x0"]) > (e[2] - e[0]) * 1.5), None)
+                if box is not None:
+                    txt = " ".join(w["text"] for w in body
+                                   if box["x0"] - 0.6 <= (w["x0"] + w["x1"]) / 2 <= box["x1"] + 0.6)
+                else:
+                    txt = " ".join(w["text"] for w in body
+                                   if e[0] <= (w["x0"] + w["x1"]) / 2 < e[2])
+                if txt.strip():
+                    cells[(d, h)] = txt.strip()
+            if cells:
+                out.setdefault(name, {}).update(cells)
+    return out
 
 
 def _audit_classes(page):

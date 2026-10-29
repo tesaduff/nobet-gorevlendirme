@@ -1,4 +1,9 @@
-Sürüm 2.7.1
+Sürüm 2.7.2
+
+- Ders programı okuma ikinci bir okumayla desteklendi: tablonun başlığındaki gün ve saat sütunlarına bakılarak her ders kutusu (tek dikdörtgene yazılmış 2-3 saatlik bloklar dahil) kapladığı bütün saatlere yayılır; ilk okumada eksik kalan saat ya da sınıf varsa tamamlanır
+- Haftalık ders saati toplamı denetimi tüm düzeltmelerden sonra yapılır; tutmayan öğretmen için uyarı verir
+
+Sürüm 2.7.1'deki yenilikler
 
 - Görevlendirme baskısında bir öğretmenin tablosu artık sayfa arasında bölünmez: başlık satırı bir sayfada, dersleri öbür sayfada kalmaz; sığmayan tablo başlığıyla birlikte bütünüyle sonraki sayfaya geçer
 

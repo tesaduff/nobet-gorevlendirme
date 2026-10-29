@@ -24,6 +24,7 @@ class ScheduleResult:
     teachers: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)
     layouts: list = field(default_factory=list)
+    totals: dict = field(default_factory=dict)     # öğretmen -> belgede yazılı haftalık saat
 
     def add(self, teacher, day, hour, info):
         teacher = clean_name(teacher)
@@ -202,13 +203,54 @@ def parse_schedule(pages, known_teachers=()):
                 continue
         if not page.get("tables") and page.get("text", "").strip():
             unknown += 1
+    _reconcile_geometry(res, pages)
     _join_split_blocks(res)
+    for name, total in res.totals.items():
+        read = len(res.teachers.get(name, {}))
+        if read != total:
+            res.warnings.append(f"⚠ {name}: belgede haftalık {total} saat yazıyor, {read} saat "
+                                "okunabildi — programı kontrol edin.")
     if unknown:
         res.warnings.append(f"{unknown} sayfada tablo bulunamadı (atlandı).")
     if not res.teachers:
         res.warnings.append("Belgede gün/saat tablosu bulunamadı. Tabloda 'Pazartesi, Salı…' "
                             "başlıkları ve ders saatleri olduğundan emin olun.")
     return res
+
+
+def _reconcile_geometry(res, pages):
+    """Tablo okumasını, başlık sütunlarına bakan ikinci okumayla karşılaştırır.
+
+    Tek dikdörtgene yazılmış blok derslerde (2-3 saat) tablo okuması bir saati kaçırabilir ya da
+    sınıfı yanlış hücreye koyabilir. İkinci okuma o kutuyu kapladığı bütün saatlere yaydığı için
+    eksik saati ekler, sınıfı olmayan/farklı derslerde kutunun yazısını kullanır."""
+    from .names import split_info
+    by_norm = {normalize(t): t for t in res.teachers}
+    fixed = 0
+    for page in pages:
+        for name, cells in (page.get("geo") or {}).items():
+            t = by_norm.get(normalize(clean_name(name)))
+            if t is None:
+                continue
+            slots = res.teachers[t]
+            for key, text in cells.items():
+                if not text or normalize(text) in _EMPTY:
+                    continue
+                cur = slots.get(key)
+                if cur is None:
+                    slots[key] = text
+                    fixed += 1
+                    continue
+                c_cur, c_new = split_info(cur)[0], split_info(text)[0]
+                if c_new and c_cur != c_new:
+                    slots[key] = text
+                    fixed += 1
+                elif not c_new and c_cur and normalize(split_info(cur)[1]) != normalize(
+                        split_info(text)[1]) and len(text) > len(cur):
+                    pass       # emin olunamayan fark: tablo okuması korunur
+    if fixed:
+        res.warnings.append(f"ℹ {fixed} ders hücresi ikinci okumayla (kutu/başlık karşılaştırması) "
+                            "düzeltildi veya tamamlandı.")
 
 
 def _owner_or_unknown(owner, res, p_idx):
@@ -331,7 +373,6 @@ def _parse_carsaf_rows(grid, start, col_day, hours, res, matcher, p_idx):
                 break
             if t:
                 break
-        before = len(res.teachers.get(clean_name(label), {}))
         for c, d in enumerate(col_day):
             v = row[c]
             # Birleştirilmiş hücre (blok ders): soldaki hücrenin dersi aynı gün içinde devam eder.
@@ -341,10 +382,8 @@ def _parse_carsaf_rows(grid, start, col_day, hours, res, matcher, p_idx):
             if d is None or not hours[c]:
                 continue
             _emit(res, clean_name(label), kind, d, hours[c], v, matcher)
-        read = len(res.teachers.get(clean_name(label), {})) - before
-        if kind == "teacher" and total is not None and read != total:
-            res.warnings.append(f"⚠ {clean_name(label)}: belgede haftalık {total} saat yazıyor, "
-                                f"{read} saat okunabildi — programı kontrol edin.")
+        if kind == "teacher" and total is not None:
+            res.totals[clean_name(label)] = total
 
 
 def _parse_days_in_rows(grid, owner, kind, res, matcher, p_idx):
