@@ -247,7 +247,7 @@ class HourStripDelegate(QStyledItemDelegate):
         f.setPointSizeF(max(7.0, f.pointSizeF() - 1.5))
         f.setBold(True)
         painter.setFont(f)
-        labeled = "need" in data          # kutunun altına "boş" / "dolu" yazılır
+        labeled = True                    # kutunun altına "boş" / "dolu" yazılır
         x = option.rect.left() + 8
         total = self.BOX + (self.LABEL if labeled else 0)
         y = option.rect.top() + (option.rect.height() - total) // 2
@@ -281,10 +281,15 @@ class HourStripDelegate(QStyledItemDelegate):
             painter.setFont(bold)
             painter.drawText(r, Qt.AlignCenter, str(h))
             if labeled:
-                free = h not in data.get("busy", set())
+                if "lessons" in data:
+                    free = h not in data["lessons"]
+                    color = muted if free else QColor(theme.ACCENT)
+                else:
+                    free = h not in data.get("busy", set())
+                    color = QColor("#15803d") if free else QColor("#b91c1c" if not dark
+                                                                  else "#fca5a5")
                 painter.setFont(small)
-                painter.setPen(QColor("#15803d") if free else QColor("#b91c1c" if not dark
-                                                                     else "#fca5a5"))
+                painter.setPen(color)
                 painter.drawText(QRect(x - 4, y + self.BOX + 1, self.BOX + 8, self.LABEL),
                                  Qt.AlignHCenter | Qt.AlignTop, "boş" if free else "dolu")
             x += self.BOX + self.GAP
@@ -293,7 +298,7 @@ class HourStripDelegate(QStyledItemDelegate):
     def sizeHint(self, option, index):
         data = index.data(Qt.UserRole) or {}
         n = int(data.get("max", 8)) if "lessons" in data else len(data.get("need", ()))
-        extra = self.LABEL if "need" in data else 0
+        extra = self.LABEL
         return QSize(16 + n * (self.BOX + self.GAP), self.BOX + 14 + extra)
 
 
@@ -1019,7 +1024,7 @@ class DailyTab(QWidget):
             self.people.setColumnWidth(c, w)
         self.people.setShowGrid(False)
         self.people.verticalHeader().hide()
-        self.people.verticalHeader().setDefaultSectionSize(46)
+        self.people.verticalHeader().setDefaultSectionSize(54)
         self.people.setSelectionMode(QAbstractItemView.NoSelection)
         self.people.setFocusPolicy(Qt.NoFocus)
         self.people.setMinimumHeight(170)
@@ -1094,15 +1099,7 @@ class DailyTab(QWidget):
         dl.addWidget(legend)
 
         # Joker öğretmenler: o gün okulda olan, elle eklenen öğretmenler
-        self.joker_edit = QLineEdit()
-        self.joker_edit.setPlaceholderText("Joker öğretmenin adını yazın veya listeden seçin…")
-        self.joker_edit.setMinimumHeight(38)
-        self.joker_completer = QCompleter([])
-        self.joker_completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.joker_completer.setFilterMode(Qt.MatchContains)
-        self.joker_edit.setCompleter(self.joker_completer)
-        self.joker_edit.returnPressed.connect(self._add_joker)
-        add_j = variant(QPushButton("＋  Joker ekle"), "primary")
+        add_j = variant(QPushButton("＋  Joker öğretmen ekle"), "primary")
         add_j.setMinimumHeight(38)
         add_j.clicked.connect(self._add_joker)
         self.joker_msg = QLabel()
@@ -1116,12 +1113,12 @@ class DailyTab(QWidget):
         jv.setSpacing(6)
         row1 = QHBoxLayout()
         self.joker_title = QLabel("<b style='font-size:11pt'>🃏 Joker öğretmenler</b>")
-        jsub = QLabel("Nöbetçilerden sonra ilk sırada bunlar görevlendirilir")
+        jsub = QLabel("Listede olmayan (ör. dışarıdan gelen) ya da bugün dersi olmayan öğretmenler."
+                      " Nöbetçilerden sonra ilk sırada bunlar görevlendirilir.")
         jsub.setObjectName("subtitle")
+        jsub.setWordWrap(True)
         row1.addWidget(self.joker_title)
-        row1.addWidget(jsub)
-        row1.addStretch()
-        row1.addWidget(self.joker_edit, 1)
+        row1.addWidget(jsub, 1)
         row1.addWidget(add_j)
         row2 = QHBoxLayout()
         row2.addLayout(self.chips)
@@ -1525,37 +1522,60 @@ class DailyTab(QWidget):
             chip.setToolTip("Listeden çıkarmak için tıklayın")
             chip.clicked.connect(lambda _c=False, who=t: self._remove_joker(who))
             self.chips.addWidget(chip)
-        duty = {t for t, _ in self.duty}
-        wd = self.date.date().dayOfWeek() - 1
-        busy_today = set(teachers_with_lessons(self.schedule, wd))
-        names = sorted((t for t in self.db.all_teachers()
-                        if t not in duty and t not in jokers and t not in self.absences()),
-                       key=lambda t: (t in busy_today, normalize(t)))
-        self.joker_completer.model().setStringList(names)
         self.joker_title.setText(f"<b style='font-size:11pt'>🃏 Joker öğretmenler"
                                  f"{f' ({len(jokers)})' if jokers else ''}</b>")
 
     def _add_joker(self):
-        name = clean_name(self.joker_edit.text())
-        if not name:
-            self.joker_msg.setText("<span style='color:#b45309'>Önce bir ad yazın.</span>")
-            return
-        known = NameMatcher(self.db.all_teachers()).match(name)
-        name = known or name
-        if name in self.absences():
-            self.joker_msg.setText(f"<span style='color:#b91c1c'>{name} bugün gelmeyenler "
-                                   "arasında, joker olamaz.</span>")
-            return
+        """Joker öğretmen ekleme penceresi: adı soyadı sorulur, eklenince bildirilir."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Joker öğretmen ekle")
+        dlg.resize(460, 220)
+        edit = QLineEdit()
+        edit.setPlaceholderText("Ör. Ayşe Yılmaz")
+        edit.setMinimumHeight(38)
+        duty = {t for t, _ in self.duty}
         jokers = self.db.jokers(self.date_iso())
+        names = sorted((t for t in self.db.all_teachers()
+                        if t not in duty and t not in jokers and t not in self.absences()),
+                       key=normalize)
+        comp = QCompleter(names, dlg)
+        comp.setCaseSensitivity(Qt.CaseInsensitive)
+        comp.setFilterMode(Qt.MatchContains)
+        edit.setCompleter(comp)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Ekle")
+        variant(bb.button(QDialogButtonBox.Ok), "primary")
+        bb.button(QDialogButtonBox.Cancel).setText("Vazgeç")
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        v = QVBoxLayout(dlg)
+        v.addWidget(page_header("🃏  Joker öğretmen ekle",
+                                "Okuldaki listede olmasa da olur. Nöbetçi kalmazsa önce joker "
+                                "öğretmenler görevlendirilir."))
+        v.addWidget(QLabel("<b>Öğretmenin adı soyadı:</b>"))
+        v.addWidget(edit)
+        v.addStretch()
+        v.addWidget(bb)
+        edit.setFocus()
+        if not run_dialog(dlg):
+            return
+        name = clean_name(edit.text())
+        if not name:
+            _info(self, "Öğretmenin adını soyadını yazın.", "Joker öğretmen")
+            return
+        name = NameMatcher(self.db.all_teachers()).match(name) or name
+        if name in self.absences():
+            _info(self, f"{name} bugün gelmeyenler arasında; joker olarak eklenemez.",
+                  "Joker öğretmen")
+            return
         if name in jokers:
-            self.joker_msg.setText(f"ℹ {name} zaten joker listesinde.")
-        else:
-            self.db.set_jokers(self.date_iso(), jokers + [name])
-            self.joker_msg.setText(f"✅ <b>{name}</b> joker listesine eklendi.")
-            self.win.statusBar().showMessage(f"✅ {name} joker öğretmen listesine eklendi.", 6000)
-        self.joker_edit.clear()
+            _info(self, f"{name} zaten joker öğretmen listesinde.", "Joker öğretmen")
+            return
+        self.db.set_jokers(self.date_iso(), jokers + [name])
         self.plan = None
         self._fill_jokers()
+        self.joker_msg.setText(f"✅ <b>{name}</b> listeye eklendi.")
+        _info(self, f"✅ {name} joker öğretmen listesine eklendi.", "Joker öğretmen")
 
     def _remove_joker(self, who):
         self.db.set_jokers(self.date_iso(), [t for t in self.db.jokers(self.date_iso())

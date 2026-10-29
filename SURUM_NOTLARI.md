@@ -1,4 +1,9 @@
-Sürüm 2.3.0
+Sürüm 2.3.1
+
+- "Joker öğretmen ekle" düğmesi ayrı bir pencere açar: öğretmenin adı soyadı sorulur (okul listesinde olmasa da olur), Ekle deyince "listeye eklendi" diye bildirilir
+- Gelmeyen öğretmeni seçtiğiniz ekranda ders saati kutucuklarının altında "dolu" (dersi var) / "boş" yazar
+
+Sürüm 2.3.0'daki yenilikler
 
 Görevlendirme:
 - Joker öğretmen bölümü yenilendi: adı yazıp Enter'a veya "Joker ekle"ye basın, "listeye eklendi" mesajı çıkar; eklenenler kutucuk olarak görünür, ✕ ile çıkarılır. Sıra: önce boş nöbetçiler, sonra joker öğretmenler, sonra diğer boş öğretmenler
