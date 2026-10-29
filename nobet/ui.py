@@ -4,8 +4,8 @@ import os
 import re
 import shutil
 
-from PySide6.QtCore import (QDate, QLocale, QRect, QSize, QStandardPaths, Qt, QThread, QTimer,
-                            QUrl, Signal)
+from PySide6.QtCore import (QDate, QLocale, QObject, QRect, QSize, QStandardPaths, Qt, QThread,
+                            QTimer, QUrl, Signal)
 from PySide6.QtGui import QColor, QDesktopServices, QImage, QPageLayout, QPixmap, QTextDocument
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox,
                                QStackedWidget,
@@ -300,6 +300,31 @@ class HourStripDelegate(QStyledItemDelegate):
         n = int(data.get("max", 8)) if "lessons" in data else len(data.get("need", ()))
         extra = self.LABEL
         return QSize(16 + n * (self.BOX + self.GAP), self.BOX + 14 + extra)
+
+
+class _StillFilter(QObject):
+    """Fare yalnızca gezdirildiğinde (tık / tekerlek olmadan) tabloda hiçbir şey değişmesin:
+    ipucu kutuları açılmaz, üzerine gelme vurgusu olmaz."""
+
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+        return event.type() in (QEvent.ToolTip, QEvent.HoverEnter, QEvent.HoverMove,
+                                QEvent.HoverLeave)
+
+
+_still = None
+
+
+def keep_still(*views):
+    global _still
+    if _still is None:
+        _still = _StillFilter()
+    for v in views:
+        target = v.viewport() if hasattr(v, "viewport") else v
+        target.setMouseTracking(False)
+        target.setAttribute(Qt.WA_Hover, False)
+        target.installEventFilter(_still)
+        v.installEventFilter(_still)
 
 
 def run_dialog(dlg):
@@ -1241,6 +1266,8 @@ class DailyTab(QWidget):
         self.abs_list.setObjectName("absentList")
         self.abs_list.setFixedWidth(250)
         self.abs_list.setCursor(Qt.PointingHandCursor)
+        self.abs_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.abs_list.setDragEnabled(False)
         self.abs_list.currentRowChanged.connect(lambda _r: self.show_plan(keep_list=True))
         abs_box = QVBoxLayout()
         abs_lbl = QLabel("<b>Gelmeyen öğretmenler</b>")
@@ -1291,6 +1318,7 @@ class DailyTab(QWidget):
         v.addWidget(self._build_setup())
         v.addWidget(self.stepbar)
         v.addWidget(self.steps, 1)
+        keep_still(self.people, self.gaps, self.dutyt, self.result, self.progs, self.abs_list)
         self.refresh()
 
     def go(self, index):
@@ -1893,7 +1921,6 @@ class DailyTab(QWidget):
                 idx = next((k for k in range(combo.count())
                             if combo.itemData(k) and combo.itemData(k)[0] == a.assigned), 0)
                 combo.setCurrentIndex(idx)
-                combo.setToolTip(a.note or "Nöbetçi öğretmen")
                 combo.currentIndexChanged.connect(lambda _k, row=i, cb=combo: self._changed(row, cb))
                 color = {"bos": YELLOW, "yok": RED, "joker": PURPLE}.get(a.kind)
                 if color:
@@ -2656,6 +2683,7 @@ class RecordsTab(QWidget):
         v.addLayout(top)
         v.addWidget(self.info)
         v.addLayout(body, 1)
+        keep_still(self.table, self.detail)
         self.dates = []
         self.rows = []
 

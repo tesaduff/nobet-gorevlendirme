@@ -1,4 +1,8 @@
-Sürüm 2.5.2
+Sürüm 2.5.3
+
+- Görevlendirme ve Kayıtlar ekranlarında fare yalnızca gezdirildiğinde (tıklama ve tekerlek olmadan) hiçbir şey değişmez: ipucu kutuları açılmaz, satırlar vurgulanmaz; liste yalnızca tıklayınca değişir
+
+Sürüm 2.5.2'deki yenilikler
 
 - Görevlendirilen öğretmenlerin günlük programı daha toplu: satırlar ince, öğretmenin adı solda koyu zeminde büyük ve kalın yazılı
 - Baskıda bir sayfaya çok daha fazla öğretmen sığar (13 öğretmen tek sayfa); görev hücresinde sınıf-ders ve altında kimin yerine olduğu yazar
