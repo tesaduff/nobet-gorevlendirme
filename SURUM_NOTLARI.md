@@ -1,4 +1,8 @@
-Sürüm 2.7.2
+Sürüm 2.7.3
+
+- Ders Programı sayfasında "Seçili sürümü sil" düğmesi "Ders programını sil" oldu; silmeden önce hangi program olduğunu (dosya adı ve geçerlilik tarihi) soran onay mesajı eklendi. Görevlendirme kayıtları silinmez
+
+Sürüm 2.7.2'deki yenilikler
 
 - Ders programı okuma ikinci bir okumayla desteklendi: tablonun başlığındaki gün ve saat sütunlarına bakılarak her ders kutusu (tek dikdörtgene yazılmış 2-3 saatlik bloklar dahil) kapladığı bütün saatlere yayılır; ilk okumada eksik kalan saat ya da sınıf varsa tamamlanır
 - Haftalık ders saati toplamı denetimi tüm düzeltmelerden sonra yapılır; tutmayan öğretmen için uyarı verir
