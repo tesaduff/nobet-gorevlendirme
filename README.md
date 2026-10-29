@@ -72,7 +72,7 @@ Yalnızca **onaylanan** görevlendirmeler sayımlara girer.
 yeniden açılır. İsterseniz açılışta otomatik denetleme de açılabilir.
 
 Veriler `%APPDATA%\NobetGorevlendirme\veri.db` dosyasında saklanır, güncelleme bu verileri
-silmez. Ayarlar sekmesinden yedek alabilirsiniz.
+silmez. Program her gün otomatik yedek alır: **Belgeler\Nöbet Görevlendirme\Yedekler** (son 30 gün).
 
 ## Geliştirici notları
 
