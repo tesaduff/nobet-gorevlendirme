@@ -38,7 +38,8 @@ def teacher_programs(plan, schedule):
     out = []
     for t in sorted(tasks, key=normalize):
         cells = {}
-        for (d, h), info in schedule.get(t, {}).items():
+        jokers = set(getattr(plan, "jokers", ()) or ())
+        for (d, h), info in ({} if t in jokers else schedule.get(t, {})).items():
             if d == wd:
                 sinif, ders = split_info(info or "")
                 cells[h] = ("own", " ".join(x for x in (sinif, lesson_label(ders)) if x))

@@ -276,12 +276,15 @@ QPushButton#exit {{
 QPushButton#exit:hover {{ background: #dc2626; color: white; border-color: #dc2626; }}
 QListWidget#nav {{ background: transparent; border: none; outline: none; }}
 QListWidget#nav::item {{
-    color: #c7d2fe; padding: 8px 14px; margin: 1px 10px; border-radius: 8px; font-size: 10.5pt;
+    color: #e0e7ff; padding: 7px 12px; margin: 3px 12px; border-radius: 10px; font-size: 10.5pt;
+    border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.05);
 }}
-QListWidget#nav::item:hover {{ background: rgba(255, 255, 255, 0.08); color: white; }}
+QListWidget#nav::item:hover {{
+    background: rgba(255, 255, 255, 0.14); color: white; border: 1px solid rgba(255, 255, 255, 0.5);
+}}
 QListWidget#nav::item:selected {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a}, stop:1 {a_hover});
-    color: white; font-weight: 700; border-left: 4px solid white;
+    color: white; font-weight: 700; border: 2px solid white;
 }}
 
 /* Sayfa başlıkları ve özet kutucukları */

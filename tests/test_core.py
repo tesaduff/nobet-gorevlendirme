@@ -662,3 +662,12 @@ def test_teacher_programs_show_own_and_tasks():
     assert cells[1][0] == "task" and cells[2][0] == "task" and cells[3] == ("own", "7/C FEN")
     assert "A yerine" in cells[1][1]
     assert "GÜNLÜK PROGRAMI" in programs_html(plan, sched)
+
+
+def test_joker_with_own_lessons_counts_as_free():
+    from nobet.scheduler import plan_day
+    # J ders programında var ve o gün dersleri var; joker yapılınca derssiz sayılır
+    sched = {"A": {(0, h): f"6/A D{h}" for h in range(1, 4)}, "J": {(0, 1): "5/A X", (0, 2): "5/B X"},
+             "O": {(0, 9): "5/C Y"}}
+    plan = plan_day("2026-11-02", sched, [], {"A": "Raporlu"}, {}, {}, jokers=["J"])
+    assert all(a.assigned == "J" and a.kind == "joker" for a in plan.assignments)

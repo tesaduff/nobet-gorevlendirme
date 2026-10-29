@@ -1,4 +1,10 @@
-Sürüm 2.5.0
+Sürüm 2.5.1
+
+- Joker öğretmen o gün derssiz kabul edilir: boş nöbetçiler bittikten sonra jokerin 7 saati doldurulur, ancak sonra nöbetçi olmayan diğer öğretmenlere geçilir. (Aynı saatte iki ders birden boşsa joker yalnızca birine girebilir; diğeri için not düşülür.)
+- Görev çubuğunda ve masaüstü kısayolunda da yeni simge görünür (Windows simge önbelleği kurulumda yenilenir)
+- Sol menüdeki bölümler çerçeveli
+
+Sürüm 2.5.0'daki yenilikler
 
 - Görevlendirilen öğretmenlerin günlük programı: her öğretmen için başlığında adı olan tek satırlık tablo; o günkü kendi dersleri, boş saatleri ve sarı "GÖREV" hücreleri (hangi sınıf, hangi ders, kimin yerine) birlikte görünür
 - Baskıda ilk sayfa her zamanki görevlendirme çizelgesi, sonraki sayfa(lar) bu öğretmen programlarıdır; her satır kesilip öğretmene verilebilir, satırlar sayfa arasında bölünmez

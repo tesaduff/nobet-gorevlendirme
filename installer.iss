@@ -32,7 +32,7 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
-UninstallDisplayIcon={app}\{#MyAppExe}
+UninstallDisplayIcon={app}\simge-3.ico
 UninstallDisplayName={#MyAppName}
 
 [Languages]
@@ -47,12 +47,17 @@ Type: files; Name: "{autoprograms}\Nöbetçi Öğretmen Görevlendirme.lnk"
 
 [Files]
 Source: "dist\NobetGorevlendirme\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Kısayol simgesi ayrı dosyadan: Windows eski simgeyi önbellekten göstermesin (ad her simge
+; değişiminde değişir)
+Source: "assets\icon.ico"; DestDir: "{app}"; DestName: "simge-3.ico"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\simge-3.ico"; AppUserModelID: "NobetGorev.Uygulama"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\simge-3.ico"; AppUserModelID: "NobetGorev.Uygulama"
 
 [Run]
+; Windows simge önbelleğini yenile (görev çubuğu ve masaüstünde yeni simge görünsün)
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden skipifdoesntexist
 ; Kurulum (ve sessiz güncelleme) bitince program kendiliğinden açılır
 Filename: "{app}\{#MyAppExe}"; Flags: nowait
 

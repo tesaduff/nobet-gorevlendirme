@@ -3697,6 +3697,13 @@ def _guess_month(entries):
 
 def run():
     import sys
+    if sys.platform == "win32":
+        # Görev çubuğu, Python/eski önbellek yerine programın kendi simgesini göstersin
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("NobetGorev.Uygulama")
+        except Exception:  # noqa: BLE001
+            pass
     QLocale.setDefault(QLocale(QLocale.Turkish, QLocale.Turkey))
     app = QApplication(sys.argv)
     # Qt'nin kendi pencereleri (baskı önizleme, dosya seçme, sağ tık menüsü) Türkçe olsun
