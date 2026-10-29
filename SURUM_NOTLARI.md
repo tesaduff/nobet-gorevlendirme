@@ -1,4 +1,8 @@
-Sürüm 2.6.1
+Sürüm 2.6.2
+
+- Kayıtlarda nöbetçi olmayan ama o saatte boş olan öğretmenin yanında da açıklama yazar: "(nöbetçi değil, o saatte boş)"; joker öğretmenlerde "(joker)" yazmaya devam eder
+
+Sürüm 2.6.1'deki yenilikler
 
 - Fare (veya dokunmatik fare) aşağı-yukarı hareket ettirildiğinde öğretmen listeleri ve tablolar kendiliğinden kaymaz; liste yalnızca tekerlek ya da kaydırma çubuğuyla kayar
 

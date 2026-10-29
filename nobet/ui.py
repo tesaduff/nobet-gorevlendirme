@@ -2765,7 +2765,7 @@ class RecordsTab(QWidget):
                 giren.setText(f"{assigned}  (joker)")
             elif kind != "nobetci":
                 giren.setBackground(YELLOW)
-                giren.setToolTip(note or "")
+                giren.setText(f"{assigned}  (nöbetçi değil, o saatte boş)")
             for c, val in enumerate((f"{hour}. ders", sinif or "—", ders or "—")):
                 self.detail.setItem(i, c, _item(val))
             self.detail.setItem(i, 3, giren)
