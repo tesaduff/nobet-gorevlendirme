@@ -192,3 +192,9 @@ def lesson_label(ders):
     """Ders adı belgede nasıl yazıyorsa öyle gösterilir ("DESTEK", "BİLG." …); yalnızca
     fazla boşluklar temizlenir."""
     return re.sub(r"\s+", " ", str(ders or "")).strip()
+
+
+def needs_class(info):
+    """Sınıfı olması gereken ama yazılmamış ders mi? "DESTEK" dersleri belgede sınıfsız
+    yazılır; olduğu gibi bırakılır, eksik sayılmaz."""
+    return bool(info) and not split_info(info)[0] and "destek" not in normalize(info)

@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QChe
 from . import export, theme, updater
 from .theme import BLUE, GREEN, PURPLE, RED, YELLOW, page_header, variant
 from .db import Database, data_dir
-from .names import DAYS, NameMatcher, clean_name, lesson_label, normalize, split_info
+from .names import (DAYS, NameMatcher, clean_name, lesson_label, needs_class, normalize,
+                    split_info)
 from .parse_duty import DutyEntry, is_admin_place, parse_duty
 from .parse_schedule import parse_schedule
 from .reader import ReadError, read_document
@@ -395,12 +396,6 @@ class Worker(QThread):
             self.done.emit(res)
         except Exception as e:  # noqa: BLE001 - kullanıcıya gösterilecek
             self.failed.emit(str(e))
-
-
-def needs_class(info):
-    """Sınıfı olması gereken ama yazılmamış ders mi? "DESTEK" dersleri belgede sınıfsız
-    yazılır; olduğu gibi bırakılır, eksik sayılmaz."""
-    return bool(info) and not split_info(info)[0] and "destek" not in normalize(info)
 
 
 def missing_class(data):
