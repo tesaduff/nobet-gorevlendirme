@@ -59,32 +59,37 @@ def programs_html(plan, schedule, breaks=()):
     if not rows:
         return ""
     blocks = []
+    w = 82 // n
     for t, cells in rows:
         k = sum(1 for kind, _ in cells.values() if kind == "task")
         tds = []
         for h in range(1, n + 1):
             kind, text = cells.get(h, ("free", ""))
-            text = "<br>".join(e(x) for x in text.split("\n"))
+            parts = [e(x) for x in text.split("\n")]
             if kind == "task":
-                tds.append(f"<td align=center style='background:#ffe8a3'><b>GÖREV</b><br>{text}</td>")
+                sub = parts[1].strip("()") if len(parts) > 1 else ""
+                tds.append(f"<td align=center style='background:#fde68a'><b>{parts[0]}</b>"
+                           f"<br><span style='font-size:6.5pt'>{sub}</span></td>")
             elif kind == "own":
-                tds.append(f"<td align=center>{text}</td>")
+                tds.append(f"<td align=center style='color:#334155'>{parts[0]}</td>")
             else:
-                tds.append("<td align=center style='color:#94a3b8'>boş</td>")
+                tds.append("<td align=center style='color:#94a3b8'>—</td>")
+        # Solda öğretmenin adı belirgin (koyu zemin, büyük yazı); sağda o günün ders saatleri
         blocks.append(
-            "<table border=1 cellspacing=0 cellpadding=3 width=100% "
-            "style='border-collapse:collapse; font-size:7.5pt'>"
-            f"<tr style='background:#cbd5e1'><td colspan={n}><b>{e(t)}</b> &nbsp;—&nbsp; "
-            f"{e(date_tr(plan.date))} günlük programı &nbsp;·&nbsp; <b>{k} ders görevlendirme</b>"
-            "</td></tr><tr style='background:#e2e8f0'>"
-            + "".join(f"<th width={100 // n}%>{h}. ders</th>" for h in range(1, n + 1))
+            "<table border=1 cellspacing=0 cellpadding=2 width=100% "
+            "style='border-collapse:collapse; font-size:7pt'>"
+            "<tr style='background:#e2e8f0'>"
+            f"<td width=18% rowspan=2 style='background:#1e3a8a; color:white'>"
+            f"<span style='font-size:9.5pt'><b>{e(t)}</b></span><br>"
+            f"<span style='font-size:7pt'>{k} ders görev</span></td>"
+            + "".join(f"<th width={w}%>{h}. ders</th>" for h in range(1, n + 1))
             + "</tr><tr>" + "".join(tds) + "</tr></table>")
     return ("<h3 align=center style='page-break-before:always; margin:0 0 6px 0'>"
             "GÖREVLENDİRİLEN ÖĞRETMENLERİN GÜNLÜK PROGRAMI</h3>"
             f"<p align=center style='font-size:9pt; margin:0 0 8px 0'>{e(date_tr(plan.date))} — "
-            "sarı hücreler görevlendirilen derslerdir. Her öğretmenin satırını kesip "
-            "kendisine verebilirsiniz.</p>"
-            + "".join(f"<p style='margin:8px 0 0 0{'; page-break-before:always' if i in breaks else ''}'>"
+            "sarı hücreler görevlendirilen derslerdir (altında kimin yerine olduğu yazar). Her "
+            "öğretmenin satırını kesip kendisine verebilirsiniz.</p>"
+            + "".join(f"<p style='margin:5px 0 0 0; font-size:4pt{'; page-break-before:always' if i in breaks else ''}'>"
                       f"{MARK}</p>{b}" for i, b in enumerate(blocks))
             + f"<p style='margin:0'>{MARK}</p>")
 

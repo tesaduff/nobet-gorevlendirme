@@ -1,4 +1,9 @@
-Sürüm 2.5.1
+Sürüm 2.5.2
+
+- Görevlendirilen öğretmenlerin günlük programı daha toplu: satırlar ince, öğretmenin adı solda koyu zeminde büyük ve kalın yazılı
+- Baskıda bir sayfaya çok daha fazla öğretmen sığar (13 öğretmen tek sayfa); görev hücresinde sınıf-ders ve altında kimin yerine olduğu yazar
+
+Sürüm 2.5.1'deki yenilikler
 
 - Joker öğretmen o gün derssiz kabul edilir: boş nöbetçiler bittikten sonra jokerin 7 saati doldurulur, ancak sonra nöbetçi olmayan diğer öğretmenlere geçilir. (Aynı saatte iki ders birden boşsa joker yalnızca birine girebilir; diğeri için not düşülür.)
 - Görev çubuğunda ve masaüstü kısayolunda da yeni simge görünür (Windows simge önbelleği kurulumda yenilenir)

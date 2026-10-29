@@ -1790,31 +1790,44 @@ class DailyTab(QWidget):
         t.setHorizontalHeaderLabels(["Öğretmen"] + [f"{h}. ders" for h in range(1, n + 1)])
         t.setRowCount(len(rows))
         h = t.horizontalHeader()
-        h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(0, QHeaderView.Fixed)
+        t.setColumnWidth(0, 250)
+        t.setWordWrap(False)
         for c in range(1, n + 1):
             h.setSectionResizeMode(c, QHeaderView.Stretch)
         for r, (name, cells) in enumerate(rows):
             k = sum(1 for kind, _ in cells.values() if kind == "task")
-            it = _item(f"{name}\n{k} ders görev")
+            it = _item(f"{name}  ({k})")
+            it.setToolTip(f"{name}: bugün {k} ders görevlendirme")
             f = it.font()
             f.setBold(True)
+            f.setPointSizeF(f.pointSizeF() + 1)
             it.setFont(f)
+            it.setBackground(QColor(theme.ACCENT))
+            it.setForeground(QColor("white"))
             t.setItem(r, 0, it)
             for hour in range(1, n + 1):
-                kind, text = cells.get(hour, ("free", "boş"))
-                cell = _item(("GÖREV\n" + text) if kind == "task" else text)
+                kind, text = cells.get(hour, ("free", "—"))
+                if kind == "task":
+                    # Kısa gösterim: sınıf ve ders, altında kimin yerine (soyadıyla)
+                    label, who = (text.split("\n") + [""])[:2]
+                    who = who.strip("()").replace(" yerine", "")
+                    cell = _item(f"{label}\n↳ {who.split()[-1] if who else ''}")
+                else:
+                    cell = _item(text)
                 cell.setTextAlignment(Qt.AlignCenter)
                 if kind == "task":
                     cell.setBackground(YELLOW)
                     cf = cell.font()
                     cf.setBold(True)
                     cell.setFont(cf)
-                elif kind == "free":
-                    cell.setForeground(QColor("#94a3b8"))
+                    cell.setToolTip("Görevlendirilen ders: " + text.replace("\n", " "))
+                else:
+                    cell.setForeground(QColor("#94a3b8" if kind == "free" else theme.MUTED))
                 t.setItem(r, hour, cell)
         t.resizeRowsToContents()
         for r in range(t.rowCount()):
-            t.setRowHeight(r, max(56, t.rowHeight(r) + 8))
+            t.setRowHeight(r, max(40, t.rowHeight(r) + 4))
         self.seg_btns[1].setText(f"👤  Görevlendirilenlerin günlük programı ({len(rows)})")
 
     def show_plan(self, keep_list=False):
