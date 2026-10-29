@@ -1,4 +1,9 @@
-Sürüm 2.2.0
+Sürüm 2.2.1
+
+- Görevlendirme 2. adımda her saat kutucuğunun altında "boş" veya "dolu" yazar: boş = nöbetçi o saatte derse girebilir, dolu = o saatte kendi dersi var (renkler de kalır)
+- Nöbetçiler tablosu daha geniş; adlar tek satırda
+
+Sürüm 2.2.0'daki yenilikler
 
 Görevlendirme:
 - Yeni tasarım: her öğretmenin o günkü ders saatleri numaralı kutucuklarla gösterilir; Durum düğmesi renkli (Okulda yeşil, Raporlu/İzinli kırmızı)

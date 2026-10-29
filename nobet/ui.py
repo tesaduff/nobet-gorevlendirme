@@ -228,7 +228,7 @@ class HourStripDelegate(QStyledItemDelegate):
     ya da {"max": 8, "need": {3, 5}, "busy": {5}} — boş kalan saatlerde yeşil = girebilir,
     kırmızı = kendi dersi var; diğer saatler soluk.
     """
-    BOX, GAP = 24, 5
+    BOX, GAP, LABEL = 24, 5, 14
 
     def paint(self, painter, option, index):
         from PySide6.QtGui import QPen
@@ -247,8 +247,14 @@ class HourStripDelegate(QStyledItemDelegate):
         f.setPointSizeF(max(7.0, f.pointSizeF() - 1.5))
         f.setBold(True)
         painter.setFont(f)
+        labeled = "need" in data          # kutunun altına "boş" / "dolu" yazılır
         x = option.rect.left() + 8
-        y = option.rect.top() + (option.rect.height() - self.BOX) // 2
+        total = self.BOX + (self.LABEL if labeled else 0)
+        y = option.rect.top() + (option.rect.height() - total) // 2
+        small = painter.font()
+        small.setBold(False)
+        small.setPointSizeF(max(6.5, small.pointSizeF() - 1))
+        bold = painter.font()
         muted = QColor("#64748b" if not dark else "#94a3b8")
         for h in hours:
             r = QRect(x, y, self.BOX, self.BOX)
@@ -272,14 +278,23 @@ class HourStripDelegate(QStyledItemDelegate):
             painter.setBrush(fill)
             painter.drawRoundedRect(r, 6, 6)
             painter.setPen(text)
+            painter.setFont(bold)
             painter.drawText(r, Qt.AlignCenter, str(h))
+            if labeled:
+                free = h not in data.get("busy", set())
+                painter.setFont(small)
+                painter.setPen(QColor("#15803d") if free else QColor("#b91c1c" if not dark
+                                                                     else "#fca5a5"))
+                painter.drawText(QRect(x - 4, y + self.BOX + 1, self.BOX + 8, self.LABEL),
+                                 Qt.AlignHCenter | Qt.AlignTop, "boş" if free else "dolu")
             x += self.BOX + self.GAP
         painter.restore()
 
     def sizeHint(self, option, index):
         data = index.data(Qt.UserRole) or {}
         n = int(data.get("max", 8)) if "lessons" in data else len(data.get("need", ()))
-        return QSize(16 + n * (self.BOX + self.GAP), self.BOX + 14)
+        extra = self.LABEL if "need" in data else 0
+        return QSize(16 + n * (self.BOX + self.GAP), self.BOX + 14 + extra)
 
 
 def run_dialog(dlg):
@@ -1053,6 +1068,7 @@ class DailyTab(QWidget):
             t.setFocusPolicy(Qt.NoFocus)
         align(self.gaps, 0, 1)
         align(self.dutyt, 0, 3)
+        self.dutyt.verticalHeader().setDefaultSectionSize(54)
         self.dutyt.setItemDelegateForColumn(2, HourStripDelegate(self.dutyt))
         for c, w in ((0, 48), (2, 120), (3, 70)):
             self.dutyt.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
@@ -1060,9 +1076,10 @@ class DailyTab(QWidget):
         for c, w in ((0, 72), (1, 64)):
             self.gaps.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
             self.gaps.setColumnWidth(c, w)
-        legend = QLabel("Kutucuklar boş kalan ders saatleridir: <span style='color:#16a34a'>■</span> "
-                        "boş, derse girebilir &nbsp; <span style='color:#f87171'>■</span> o saatte "
+        legend = QLabel("<span style='color:#15803d'><b>boş</b></span> = o saatte derse girebilir"
+                        " &nbsp;·&nbsp; <span style='color:#b91c1c'><b>dolu</b></span> = o saatte "
                         "kendi dersi var")
+        legend.setWordWrap(True)
         legend.setObjectName("subtitle")
         self.gaps_box = QGroupBox("Boş kalan dersler")
         gl = QVBoxLayout(self.gaps_box)
@@ -1107,8 +1124,8 @@ class DailyTab(QWidget):
         jl.addWidget(add_j)
         g2 = QHBoxLayout()
         g2.setSpacing(14)
-        g2.addWidget(self.gaps_box, 4)
-        g2.addWidget(self.duty_box, 6)
+        g2.addWidget(self.gaps_box, 3)
+        g2.addWidget(self.duty_box, 7)
         back2 = QPushButton("←  Geri")
         back2.setMinimumHeight(46)
         back2.clicked.connect(lambda: self.go(0))
