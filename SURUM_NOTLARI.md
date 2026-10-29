@@ -1,4 +1,10 @@
-Sürüm 2.5.3
+Sürüm 2.6.0
+
+- Yeni görevlendirme sırası: 1) önce joker öğretmenler — 7 saati dolana kadar (joker o gün derssiz sayılır), 2) sonra o saatte boş nöbetçiler, 3) en son o saatte dersi olmayan diğer öğretmenler
+- Gelmeyen öğretmenin adının yanında o gün kaç saat dersi ve kaç saat boşu olduğu yazar (ör. "7 saat ders, 0 saat boş")
+- Fare yalnızca gezdirildiğinde görevlendirme ekranlarında hiçbir şey değişmez
+
+Sürüm 2.5.3'teki yenilikler
 
 - Görevlendirme ve Kayıtlar ekranlarında fare yalnızca gezdirildiğinde (tıklama ve tekerlek olmadan) hiçbir şey değişmez: ipucu kutuları açılmaz, satırlar vurgulanmaz; liste yalnızca tıklayınca değişir
 

@@ -53,11 +53,10 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         ulaşan nöbetçinin yerine boş öğretmen aranır; kimse yoksa yine nöbetçiye verilir.
     excluded: otomatik görevlendirilmeyecekler (ör. idareciler). Bunlar yalnızca elle seçim
         listesinde "idareci" etiketiyle yer alır.
-    jokers: o gün okulda olup boş derslere girebilecek, elle eklenen öğretmenler. Boş nöbetçi
-        kalmazsa diğer öğretmenlerden önce bunlar (adalet sırasıyla) görevlendirilir. Bir joker
-        öğretmen o gün derssiz sayılır ve günde en fazla JOKER_MAX ders alır; jokerler dolunca
-        (ya da o saatte başka bir göreve girmişlerse) o saatte dersi olmayan diğer öğretmenlere
-        geçilir.
+    jokers: o gün okulda olup boş derslere girebilecek, elle eklenen öğretmenler. İlk önce
+        bunlar görevlendirilir: joker o gün derssiz sayılır ve günde en fazla JOKER_MAX ders
+        alır. Jokerler dolunca (ya da o saatte başka sınıftaysalar) boş nöbetçilere, onlar da
+        yoksa o saatte dersi olmayan diğer öğretmenlere geçilir.
     """
     excluded = set(excluded)
     year_counts = year_counts or {}  # eğitim yılı toplamı: adalette önce buna bakılır
@@ -110,23 +109,24 @@ def plan_day(date, schedule, duty, absences, month_counts, total_counts, max_per
         free_admins = [t for t in sorted(excluded) if t not in absences
                        and (t in teaching or t in {d for d, _ in duty})
                        and h not in busy.get(t, set())]
-        a.options = ([(t, "nöbetçi") for t in sorted(free_duty, key=fairness)] +
-                     [(t, "joker") for t in sorted(free_joker, key=fairness)] +
+        a.options = ([(t, "joker") for t in sorted(free_joker, key=fairness)] +
+                     [(t, "nöbetçi") for t in sorted(free_duty, key=fairness)] +
                      [(t, "pencere" if window(t, h) else "boş saat")
                       for t in sorted(free_other, key=lambda t: (fairness(t)[:2], not window(t, h),
                                                                  fairness(t)))] +
                      [(t, "idareci") for t in free_admins])
         under_cap = [t for t in free_duty if not max_per_day or today.get(t, 0) < max_per_day]
-        if under_cap:
-            pick = min(under_cap, key=fairness)
-            a.assigned, a.kind = pick, "nobetci"
-            a.note = ""
-        elif free_joker:
+        # Sıra: 1) joker öğretmen (günde 7 derse kadar), 2) o saatte boş nöbetçi,
+        # 3) o saatte dersi olmayan diğer öğretmenler.
+        if free_joker:
             pick = min(free_joker, key=fairness)
             a.assigned, a.kind = pick, "joker"
-            why = (f"boş nöbetçiler bugün {max_per_day} ders sınırına ulaştığı" if free_duty
-                   else "bu saatte boş nöbetçi öğretmen olmadığı")
-            a.note = f"Joker öğretmen: {why} için atandı."
+            a.note = "Joker öğretmen (önce joker öğretmenlerin 7 saati doldurulur)."
+        elif under_cap:
+            pick = min(under_cap, key=fairness)
+            a.assigned, a.kind = pick, "nobetci"
+            a.note = ("Joker öğretmen bu saatte başka bir sınıfta veya 7 dersini doldurdu."
+                      if joker_names else "")
         elif free_other:
             # Diğer öğretmenlerde de istatistik esastır: bu yıl en az derse giren önce seçilir;
             # eşitlikte iki dersi arasında boşluğu olan tercih edilir.

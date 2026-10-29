@@ -671,3 +671,12 @@ def test_joker_with_own_lessons_counts_as_free():
              "O": {(0, 9): "5/C Y"}}
     plan = plan_day("2026-11-02", sched, [], {"A": "Raporlu"}, {}, {}, jokers=["J"])
     assert all(a.assigned == "J" and a.kind == "joker" for a in plan.assignments)
+
+
+def test_joker_filled_before_duty_teachers():
+    from nobet.scheduler import JOKER_MAX, plan_day
+    sched = {"A": {(0, h): f"6/A D{h}" for h in range(1, 9)}}
+    plan = plan_day("2026-11-02", sched, [("N", "Bahçe")], {"A": "Raporlu"}, {}, {},
+                    jokers=["J"])
+    by_kind = [a.kind for a in sorted(plan.assignments, key=lambda a: a.hour)]
+    assert by_kind.count("joker") == JOKER_MAX and by_kind[-1] == "nobetci"

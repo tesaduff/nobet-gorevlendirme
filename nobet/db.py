@@ -419,7 +419,7 @@ class Database:
                         and t not in taken.get(hour, set())]
                 for t in free:
                     row(t)["chances"] += 1
-                if free and assigned:
+                if free and assigned and kind != "joker":   # joker önceliklidir, istisna değil
                     best = min(running.get(t, 0) for t in free)
                     if assigned not in free:
                         exceptions.append((date, hour, assigned, "o saatte boş nöbetçi varken"))

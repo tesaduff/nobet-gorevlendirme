@@ -44,7 +44,9 @@ Yeni ay başlayınca program uyarır ve yeni nöbet çizelgesini oluşturmayı �
 
 ### Dağıtım kuralları
 
-1. Gelmeyen öğretmenin her dersi için önce o saatte **dersi olmayan nöbetçi öğretmen** aranır.
+0. O gün **joker öğretmen** eklendiyse önce o görevlendirilir (o gün derssiz sayılır, günde en
+   fazla 7 ders).
+1. Sonra o saatte **dersi olmayan nöbetçi öğretmen** aranır.
 2. Birden fazla uygun nöbetçi varsa **bu ay en az derse girmiş olan** seçilir. Eşitlik olursa
    sırayla bugün en az derse giren, sonra tüm zamanlarda en az derse giren seçilir.
    Böylece ay sonunda sayılar eşitlenir.

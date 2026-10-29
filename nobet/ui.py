@@ -1037,6 +1037,7 @@ class DailyTab(QWidget):
         self.admins = set()
         self.row_index = {}
         self.day_len = 8
+        self.school_hours = 7
 
         self.stepbar = theme.StepBar(["Gelmeyen öğretmenleri seçin", "Boş dersler ve nöbetçiler",
                                       "Görevlendirme"])
@@ -1179,7 +1180,7 @@ class DailyTab(QWidget):
         row1 = QHBoxLayout()
         self.joker_title = QLabel("<b style='font-size:11pt'>🃏 Joker öğretmenler</b>")
         jsub = QLabel("Listede olmayan (ör. dışarıdan gelen) ya da bugün dersi olmayan öğretmenler."
-                      " Nöbetçilerden sonra ilk sırada bunlar görevlendirilir.")
+                      " İlk önce bunlar görevlendirilir (günde 7 derse kadar).")
         jsub.setObjectName("subtitle")
         jsub.setWordWrap(True)
         row1.addWidget(self.joker_title)
@@ -1204,9 +1205,9 @@ class DailyTab(QWidget):
         self.run_btn.clicked.connect(lambda: self.run())
         f2 = QHBoxLayout()
         f2.addWidget(back2)
-        info2 = QLabel("Sıra: o saatte boş olan nöbetçilerden bu yıl en az derse girmiş olan; "
-                       "boş nöbetçi yoksa joker öğretmenler, onlar da yoksa o saatte dersi "
-                       "olmayan diğer öğretmenler.")
+        info2 = QLabel("Sıra: 1) joker öğretmenler (günde 7 derse kadar), 2) o saatte boş "
+                       "nöbetçiler (bu yıl en az derse giren önce), 3) o saatte dersi olmayan "
+                       "diğer öğretmenler.")
         info2.setObjectName("subtitle")
         info2.setWordWrap(True)
         f2.addWidget(info2, 1)
@@ -1414,6 +1415,9 @@ class DailyTab(QWidget):
                            if t not in self.admins), key=normalize)
         self.day_len = max([8] + [h for slots in self.schedule.values() for (d, h) in slots
                                   if d == wd])
+        # Okulun o günkü gerçek ders saati sayısı (boş saat hesabı için)
+        self.school_hours = max([h for slots in self.schedule.values() for (d, h) in slots
+                                 if d == wd] or [7])
         if teaching:
             msgs.append(f"<span style='color:{theme.MUTED}'>Bugün {len(teaching)} öğretmenin dersi "
                         f"var, {len({t for t, _ in self.duty})} nöbetçi.</span>")
@@ -1533,7 +1537,9 @@ class DailyTab(QWidget):
         for t, reason in absent.items():
             r = self.gaps.rowCount()
             self.gaps.insertRow(r)
-            head = _item(f"{t}  ·  {reason}")
+            k = len(self._lessons_today(t))
+            head = _item(f"{t}  ·  {reason}  ·  {k} saat ders, "
+                         f"{max(0, self.school_hours - k)} saat boş")
             f = head.font()
             f.setBold(True)
             head.setFont(f)
@@ -1879,7 +1885,8 @@ class DailyTab(QWidget):
             for t in names:
                 idxs = groups[t]
                 missing = sum(1 for i in idxs if not p.assignments[i].assigned)
-                it = QListWidgetItem(f"{t}\n{p.absences.get(t, '')} · {len(idxs)} ders" +
+                it = QListWidgetItem(f"{t}\n{p.absences.get(t, '')} · {len(idxs)} saat ders, "
+                                     f"{max(0, self.school_hours - len(idxs))} boş" +
                                      (f" · {missing} atanamadı" if missing else ""))
                 it.setData(Qt.UserRole, t)
                 self.abs_list.addItem(it)
@@ -1893,7 +1900,9 @@ class DailyTab(QWidget):
                 continue
             r = self.result.rowCount()
             self.result.insertRow(r)
-            head = _item(f"{absent}   ·   {p.absences.get(absent, '')}   ·   {len(idxs)} ders")
+            k = len(idxs)
+            head = _item(f"{absent}   ·   {p.absences.get(absent, '')}   ·   {k} saat ders, "
+                         f"{max(0, self.school_hours - k)} saat boş")
             f = head.font()
             f.setBold(True)
             head.setFont(f)
