@@ -2098,7 +2098,8 @@ class ScheduleTab(QWidget):
         self.versions.itemSelectionChanged.connect(self._select_version)
         load = variant(QPushButton("📄  Yeni ders programı yükle (PDF / Excel)"), "primary")
         load.clicked.connect(self.load_file)
-        rem = variant(QPushButton("Seçili sürümü sil"), "danger")
+        rem = variant(QPushButton("🗑  Ders programını sil"), "danger")
+        rem.setToolTip("Listede seçili ders programını (yüklediğiniz PDF/Excel'i) siler")
         rem.clicked.connect(self.delete_version)
 
         self.teachers = QListWidget()
@@ -2313,7 +2314,15 @@ class ScheduleTab(QWidget):
             self.win.next_step("Ders programı kaydedildi.")
 
     def delete_version(self):
-        if self.version and _ask(self, "Seçili program sürümü silinsin mi?"):
+        r = self.versions.currentRow()
+        if not self.version or r < 0:
+            _info(self, "Silmek için listeden bir ders programı seçin.")
+            return
+        name = self.versions.item(r, 1).text() if self.versions.item(r, 1) else "ders programı"
+        when = self.versions.item(r, 0).text() if self.versions.item(r, 0) else ""
+        if _ask(self, f"“{name}” ders programı ({when} tarihinden itibaren) silinsin mi?\n\n"
+                      "Bu programdaki öğretmenler ve dersler silinir. Görevlendirme kayıtları "
+                      "silinmez.", "Ders programını sil"):
             self.db.delete_schedule_version(self.version)
             self.refresh()
             self.win.changed()
