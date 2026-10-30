@@ -1,4 +1,9 @@
-Sürüm 2.8.1
+Sürüm 2.8.2
+
+- Nöbet Çizelgesi sayfasında kayıtlı ayların yanında "✏ Düzenle (öğretmen tikleri)" düğmesi: ayı seçip basınca (ya da satıra çift tıklayınca) nöbet tutan öğretmenlerin tik listesi, gün ve nöbet yerleri her zaman yeniden açılır; kaydettikten sonra da, istediğiniz kadar değiştirilebilir
+- "⚙ Yeniden dağıt" düğmesi: seçili ay için Nöbetmatik'i o ayla açar; öğretmen tikleri o ayın çizelgesine göre gelir
+
+Sürüm 2.8.1'deki yenilikler
 
 - Nöbet çizelgesi Düzenle penceresinde (PDF'den yüklenen çizelgeler dahil) sol tarafta "Nöbet tutan öğretmenler" listesi: tik = çizelgede nöbet tutuyor. Tiki kaldırınca öğretmenin satırları çizelgeden çıkar, geri koyunca yeniden gelir; tiki olmayan birini işaretleyince yeni satır eklenir (gün ve nöbet yerini girersiniz). Tablodan elle satır silmek ya da eklemek listeyi de günceller. Bu liste sonradan da, her Düzenle'de görünür
 - Nöbetmatik 1. adımda, kayıtlı bir çizelgesi olan ay seçilince o çizelgede nöbet tutanlar işaretli gelir; tikleri değiştirip yeniden dağıtabilirsiniz

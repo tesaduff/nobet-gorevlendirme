@@ -2412,7 +2412,16 @@ class DutyTab(QWidget):
         # Kademe 1: yüklü aylar
         view = QPushButton("👁  Görüntüle")
         view.clicked.connect(self.open_view)
-        for b in (view, prt, rem):
+        edit_b = variant(QPushButton("✏  Düzenle (öğretmen tikleri)"), "primary")
+        edit_b.setToolTip("Seçili ayın çizelgesini açar: nöbet tutan öğretmenlerin tik listesi, "
+                          "gün ve nöbet yerleri")
+        edit_b.clicked.connect(lambda: self.edit(selected=True))
+        redo_b = QPushButton("⚙  Yeniden dağıt")
+        redo_b.setToolTip("Seçili ay için Nöbetmatik'i açar: öğretmenleri işaretleyip yeniden "
+                          "adil dağıtır")
+        redo_b.clicked.connect(lambda: self.open_nobetmatik(self.month()))
+        self.months.doubleClicked.connect(lambda _i: self.edit(selected=True))
+        for b in (view, edit_b, redo_b, prt, rem):
             b.setMinimumHeight(40)
         self.months.setMinimumHeight(110)
         choose = QGroupBox("Bu ayın nöbet çizelgesini nasıl hazırlamak istersiniz?")
@@ -2423,12 +2432,17 @@ class DutyTab(QWidget):
         card1 = QGroupBox("Yüklü nöbet çizelgeleri")
         c1 = QVBoxLayout(card1)
         bh = QHBoxLayout()
+        bh.addWidget(edit_b, 2)
+        bh.addWidget(redo_b, 1)
         bh.addWidget(view, 1)
         bh.addWidget(prt, 1)
         bh.addWidget(rem)
         c1.addLayout(bh)
         c1.addWidget(self.months, 1)
-        hint = QLabel("Görevlendirme, seçilen tarihin ayına ait çizelgeyi kullanır.")
+        hint = QLabel("Görevlendirme, seçilen tarihin ayına ait çizelgeyi kullanır. Bir ayı "
+                      "<b>seçip Düzenle</b>'ye basın (ya da satıra çift tıklayın): nöbet tutacak "
+                      "öğretmenlerin tiklerini istediğiniz zaman değiştirebilirsiniz.")
+        hint.setWordWrap(True)
         hint.setObjectName("subtitle")
         c1.addWidget(hint)
         p1 = QWidget()
@@ -2608,13 +2622,18 @@ class DutyTab(QWidget):
         if run_dialog(dlg):
             self._save(dlg)
 
-    def edit(self):
-        """Elle giriş: seçili ayın çizelgesini (yoksa boş bir çizelgeyi) düzenler."""
+    def edit(self, selected=False):
+        """Seçili ayın çizelgesini (yoksa boş bir çizelgeyi) düzenler. selected=True ise
+        listeden seçilen ay açılır; seçili ay yoksa uyarılır."""
         teachers = self._teachers()
         if not teachers:
             _info(self, "Önce Ders Programı sayfasından ders programını yükleyin.")
             return
-        m = self.month() or dt.date.today().strftime("%Y-%m")
+        m = self.month()
+        if selected and not m:
+            _info(self, "Düzenlemek için listeden bir ay seçin.")
+            return
+        m = m or dt.date.today().strftime("%Y-%m")
         entries = [DutyEntry(wd, t, p, d) for wd, d, t, p in self.db.duty_rows(m)]
         if not entries:
             entries = [DutyEntry(0, "", "")]
