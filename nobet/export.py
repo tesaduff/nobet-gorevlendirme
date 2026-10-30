@@ -38,8 +38,7 @@ def teacher_programs(plan, schedule):
     out = []
     for t in sorted(tasks, key=normalize):
         cells = {}
-        jokers = set(getattr(plan, "jokers", ()) or ())
-        for (d, h), info in ({} if t in jokers else schedule.get(t, {})).items():
+        for (d, h), info in schedule.get(t, {}).items():
             if d == wd:
                 sinif, ders = split_info(info or "")
                 cells[h] = ("own", " ".join(x for x in (sinif, lesson_label(ders)) if x))
@@ -118,14 +117,14 @@ def day_html(plan, info=None, has_logo=False, schedule=None, breaks=(), scale=1.
             f"<tr style='background:#e2e8f0'><td colspan=5><b>{e(absent)}</b>"
             f" &nbsp;—&nbsp; Mazeret: <b>{e(reason)}</b> &nbsp;({len(items)} ders)</td></tr>")
         for a in items:
-            color = {"bos": "#fff6db", "yok": "#fde7e7", "joker": "#f1e6ff"}.get(a.kind, "#ffffff")
+            color = {"bos": "#fff6db", "yok": "#fde7e7"}.get(a.kind, "#ffffff")
             sinif, ders = split_info(a.info)
             ders = lesson_label(ders)
             note = e(a.note.replace("⚠ ", "")) if a.note else ""
             rows.append(
                 f"<tr style='background:{color}'><td align=center width=9%><b>{a.hour}. ders</b></td>"
                 f"<td align=center width=12%>{e(sinif) or '—'}</td><td width=22%>{e(ders or a.info)}</td>"
-                f"<td><b>{e(a.assigned or '— atanmadı —')}</b>"
+                f"<td><b>{e(a.assigned or '')}</b>"
                 + (f"<br><span style='color:#92400e; font-size:{fs_small}pt'>{note}</span>"
                    if note else "") +
                 "</td><td width=18%></td></tr>")
@@ -163,8 +162,8 @@ def day_html(plan, info=None, has_logo=False, schedule=None, breaks=(), scale=1.
 {gap}
 {gap.join(tables) or '<p align=center>Görevlendirme yok</p>'}
 <p style="font-size:{fs_small}pt; color:#475569; margin:4px 0">Yukarıda adı geçen öğretmenler
-belirtilen ders saatlerinde ilgili sınıflarda görevlendirilmiştir. Mor satırlar joker
-öğretmenlere, sarı satırlar nöbetçi olmayan diğer öğretmenlere verilen derslerdir.</p>
+belirtilen ders saatlerinde ilgili sınıflarda görevlendirilmiştir. Sarı satırlar nöbetçi
+olmayan öğretmenlere verilen derslerdir.</p>
 {gap}
 <table width=100%><tr><td width=20%></td>{''.join(sign)}</tr></table>
 <p style="margin:0; font-size:1pt">{SECTION_END}</p>
@@ -187,8 +186,7 @@ def save_day_xlsx(path, plan, school=""):
     for c in ws[4]:
         c.font = Font(bold=True)
         c.fill = PatternFill("solid", fgColor="DDE4EE")
-    fills = {"bos": PatternFill("solid", fgColor="FFF4CC"), "yok": PatternFill("solid", fgColor="FFD6D6"),
-             "joker": PatternFill("solid", fgColor="EFE2FF")}
+    fills = {"bos": PatternFill("solid", fgColor="FFF4CC"), "yok": PatternFill("solid", fgColor="FFD6D6")}
     for a in plan.assignments:
         sinif, ders = split_info(a.info)
         ders = lesson_label(ders)
@@ -275,8 +273,7 @@ def write_records_xlsx(path, db, school=""):
 
     head_fill = PatternFill("solid", fgColor="DDE4EE")
     fills = {"bos": PatternFill("solid", fgColor="FFF4CC"),
-             "yok": PatternFill("solid", fgColor="FFD6D6"),
-             "joker": PatternFill("solid", fgColor="EFE2FF")}
+             "yok": PatternFill("solid", fgColor="FFD6D6")}
 
     def sheet(wb, title, headers, widths, first=False):
         ws = wb.active if first else wb.create_sheet()

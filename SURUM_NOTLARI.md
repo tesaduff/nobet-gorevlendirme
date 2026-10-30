@@ -1,4 +1,15 @@
-Sürüm 2.7.3
+Sürüm 2.8.0
+
+Nöbet çizelgesi:
+- Nöbet yerlerinin kişi sayısı günlere göre ayrı girilir (ör. 2. Kat pazartesi 3 kişi, salı 2 kişi; 0 yazılan gün o yerde nöbetçi olmaz). Dağıtım, baskı ve kayıtlar günlere göre sayılara uyar
+
+Görevlendirme:
+- Yalnızca o günün nöbetçi öğretmenlerine, o saatte dersi boş olanlara görev verilir (bu yıl en az derse giren önce)
+- Boş nöbetçi yoksa ders BOŞ bırakılır: hiç isim yazılmaz, sonuç ekranında açılır listeden elle seçersiniz; baskıda da o hücre boş kalır
+- Yeni "Ders kısıtları": mazereti olan öğretmene belli gün ve saatlerde (ör. çarşamba 1. ve 4. ders) ders görevlendirilmez; nöbetçi olsa ve dersi boş olsa bile. Görevlendirme 2. adımdan ve Ayarlar'dan düzenlenir; nöbetçi tablosunda kısıtlı saatler "kısıt" diye gösterilir
+- Joker öğretmen özelliği tamamen kaldırıldı
+
+Sürüm 2.7.3'teki yenilikler
 
 - Ders Programı sayfasında "Seçili sürümü sil" düğmesi "Ders programını sil" oldu; silmeden önce hangi program olduğunu (dosya adı ve geçerlilik tarihi) soran onay mesajı eklendi. Görevlendirme kayıtları silinmez
 

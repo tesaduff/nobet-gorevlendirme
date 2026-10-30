@@ -44,16 +44,15 @@ Yeni ay başlayınca program uyarır ve yeni nöbet çizelgesini oluşturmayı �
 
 ### Dağıtım kuralları
 
-0. O gün **joker öğretmen** eklendiyse önce o görevlendirilir (o gün derssiz sayılır, günde en
-   fazla 7 ders).
-1. Sonra o saatte **dersi olmayan nöbetçi öğretmen** aranır.
-2. Birden fazla uygun nöbetçi varsa **bu ay en az derse girmiş olan** seçilir. Eşitlik olursa
-   sırayla bugün en az derse giren, sonra tüm zamanlarda en az derse giren seçilir.
-   Böylece ay sonunda sayılar eşitlenir.
-3. Boş nöbetçi yoksa o gün okulda olan ve **o saatte dersi olmayan nöbetçi olmayan öğretmen**
-   atanır. İki dersi arasında boşluğu olan öğretmene öncelik verilir. Bu satırlar **sarı** renkle
-   ve *"nöbetçi değil"* notuyla gösterilir.
-4. Kimse boş değilse ders **kırmızı** renkle *"atanamadı"* olarak işaretlenir.
+1. Gelmeyen öğretmenin her dersi için yalnızca **o günün nöbetçi öğretmenlerine**, o saatte
+   **dersi boş olanlara** görev verilir.
+2. Birden fazla uygun nöbetçi varsa **bu eğitim yılında en az derse girmiş olan** seçilir (eşitlikte
+   bu ay, sonra tüm zamanlar). Böylece sayılar eşitlenir.
+3. O saatte boş nöbetçi yoksa ders **boş bırakılır** (hiç isim yazılmaz, kırmızı satır); sonuç
+   ekranındaki açılır listeden elle seçilir.
+4. **Ders kısıtları:** mazereti olan bir nöbetçiye belli gün ve saatlerde (ör. çarşamba 1. ve
+   4. ders) görev verilmez; o saatte dersi boş olsa bile. Görevlendirme ekranından veya
+   Ayarlar'dan eklenir.
 5. Ayarlar'dan isteğe bağlı *"bir nöbetçiye günde en fazla X ders"* sınırı konabilir.
 
 Yalnızca **onaylanan** görevlendirmeler sayımlara girer.

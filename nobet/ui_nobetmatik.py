@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QComb
 from . import export, theme
 from . import ui as U
 from .names import DAYS, normalize
-from .nobetmatik import ADMIN_PLACE, Config, distribute, lesson_count, move_teacher, rule_text
+from .nobetmatik import (ADMIN_PLACE, Config, distribute, lesson_count, move_teacher,
+                         place_counts, rule_text)
 from .theme import page_header, variant
 
 STEPS = ["Ay ve öğretmenler", "Nöbet yerleri", "Seçenekler", "Kurallar", "Dağıt",
@@ -134,15 +135,17 @@ class NobetmatikPage(QWidget):
         return p
 
     def _page_places(self):
-        self.places = QTableWidget(0, 2)
-        self.places.setHorizontalHeaderLabels(["Nöbet yeri", "Her gün kaç nöbetçi?"])
-        U.align(self.places)
+        # Her gün için ayrı kişi sayısı: 2. Kat pazartesi 3, salı 2 kişi olabilir
+        self.places = QTableWidget(0, 6)
+        self.places.setHorizontalHeaderLabels(["Nöbet yeri", "Pzt", "Sal", "Çar", "Per", "Cum"])
+        U.align(self.places, 1, 2, 3, 4, 5)
         U._stretch(self.places, 0)
-        self.places.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.places.setColumnWidth(1, 190)
+        for c in range(1, 6):
+            self.places.horizontalHeader().setSectionResizeMode(c, QHeaderView.Fixed)
+            self.places.setColumnWidth(c, 78)
         self.places.verticalHeader().hide()
         self.places.setMinimumHeight(120)
-        self.places.setFixedWidth(560)
+        self.places.setFixedWidth(720)
         add = QPushButton("＋  Yer ekle")
         add.clicked.connect(lambda: self._add_place("", 1))
         rem = variant(QPushButton("Seçili yeri sil"), "danger")
@@ -155,9 +158,10 @@ class NobetmatikPage(QWidget):
         h.addWidget(add)
         h.addStretch()
         h.addWidget(rem)
-        self.cap_info.setFixedWidth(560)
+        self.cap_info.setFixedWidth(720)
         hint = QLabel("Okulunuzdaki nöbet yerlerini (Bahçe, Zemin Kat, 1. Kat, 2. Kat, Kantin…) ve "
-                      "her yerde <b>her gün</b> kaç nöbetçi olacağını girin.")
+                      "her yerde <b>her gün ayrı ayrı</b> kaç nöbetçi olacağını girin "
+                      "(ör. 2. Kat pazartesi 3, salı 2 kişi). O gün nöbetçi gerekmiyorsa 0 yazın.")
         hint.setWordWrap(True)
         hint.setAlignment(Qt.AlignCenter)
         col = QVBoxLayout()
@@ -442,15 +446,20 @@ class NobetmatikPage(QWidget):
             box.setChecked(on)
 
     def _add_place(self, name, count):
+        """count: tek sayı (her gün aynı) ya da 5 sayılık liste (pzt..cum)."""
+        counts = place_counts(count)
+        if not any(counts):
+            counts = [1] * 5
         r = self.places.rowCount()
         self.places.insertRow(r)
         self.places.setItem(r, 0, QTableWidgetItem(name))
-        sp = QSpinBox()
-        sp.setRange(1, 20)
-        sp.setValue(int(count) or 1)
-        sp.setAlignment(Qt.AlignCenter)
-        sp.valueChanged.connect(self._update_capacity)
-        self.places.setCellWidget(r, 1, sp)
+        for d in range(5):
+            sp = QSpinBox()
+            sp.setRange(0, 20)
+            sp.setValue(counts[d])
+            sp.setAlignment(Qt.AlignCenter)
+            sp.valueChanged.connect(self._update_capacity)
+            self.places.setCellWidget(r, 1 + d, sp)
         self._update_capacity()
         if not name:
             self.places.editItem(self.places.item(r, 0))
@@ -473,7 +482,8 @@ class NobetmatikPage(QWidget):
         for r in range(self.places.rowCount()):
             name = (self.places.item(r, 0).text() if self.places.item(r, 0) else "").strip()
             if name:
-                c.places.append([name, self.places.cellWidget(r, 1).value()])
+                c.places.append([name, [self.places.cellWidget(r, 1 + d).value()
+                                        for d in range(5)]])
         c.per_week = 2 if self.pw2.isChecked() else 1
         c.skip_free_days = self.skip_free.isChecked()
         c.prefer_light_days = self.light.isChecked()
@@ -489,37 +499,49 @@ class NobetmatikPage(QWidget):
 
     def _update_capacity(self):
         c = self._collect()
-        per_day = c.capacity()
+        days = [c.day_capacity(d) for d in range(5)]
+        weekly = sum(days)
         n = len([t for t in c.teachers if t not in c.exempt])
-        weekly = per_day * 5 * (2 if c.per_week >= 2 else 1)
-        if per_day * 5 >= n:
-            self.cap_info.setText(f"✅ Günde <b>{per_day}</b>, haftada <b>{per_day * 5}</b> nöbet yeri; "
-                                  f"nöbet tutacak <b>{n}</b> öğretmen. Herkese haftada 1 nöbet düşer.")
+        per_day = " · ".join(f"{n} {days[d]}" for d, n in enumerate(("Pzt", "Sal", "Çar", "Per", "Cum")))
+        if weekly >= n:
+            self.cap_info.setText(f"✅ Günlere göre nöbetçi yeri: <b>{per_day}</b> (haftada "
+                                  f"<b>{weekly}</b>); nöbet tutacak <b>{n}</b> öğretmen. "
+                                  "Herkese haftada 1 nöbet düşer.")
             self.cap_info.setStyleSheet("")
-            self.fit.setVisible(per_day * 5 - n >= 5)
+            self.fit.setVisible(weekly - n >= 5)
             self.fit.setText("Yer sayısını öğretmen sayısına göre ayarla")
         else:
-            self.cap_info.setText(f"ℹ Haftada <b>{per_day * 5}</b> nöbet yeri var, <b>{n}</b> "
-                                  "öğretmen nöbet tutacak. Kimse dışarıda kalmaz: fazladan "
-                                  "nöbetçiler yerlere sırayla eklenir. İsterseniz aşağıdaki "
-                                  "düğmeyle kişi sayılarını kendiniz de ayarlayabilirsiniz.")
+            self.cap_info.setText(f"ℹ Günlere göre nöbetçi yeri: <b>{per_day}</b> (haftada "
+                                  f"<b>{weekly}</b>), <b>{n}</b> öğretmen nöbet tutacak. Kimse "
+                                  "dışarıda kalmaz: fazladan nöbetçiler yerlere sırayla eklenir. "
+                                  "İsterseniz aşağıdaki düğmeyle sayıları otomatik ayarlayabilirsiniz.")
             self.cap_info.setStyleSheet("color:#b45309; font-weight:600")
             self.fit.setVisible(True)
             self.fit.setText("Herkese haftada 1 nöbet yetecek kadar yer ayarla")
-        del weekly
 
     def _fit_capacity(self):
-        """Kişi sayılarını, herkese haftada tam 1 nöbet düşecek şekilde yerlere paylaştırır."""
-        import math
+        """Her günün toplamını, herkese haftada 1 nöbet düşecek kadar artırır; farklı olan günlük
+        sayıları korur: yalnızca eksik kalan kişiler en az dolu günlerden başlayarak eklenir."""
         c = self._collect()
         n = len([t for t in c.teachers if t not in c.exempt])
         rows = self.places.rowCount()
         if not rows:
             return
-        per_day = max(rows, math.ceil(n / 5))
-        base, extra = divmod(per_day, rows)
-        for r in range(rows):
-            self.places.cellWidget(r, 1).setValue(base + (1 if r < extra else 0))
+        days = [c.day_capacity(d) for d in range(5)]
+        open_days = [d for d in range(5) if days[d] > 0] or list(range(5))
+        missing = n - sum(days)
+        i = 0
+        while missing > 0:
+            d = sorted(open_days, key=lambda x: (days[x], x))[0]
+            # o günde en az kişili yere bir kişi ekle
+            r = min(range(rows), key=lambda rr: self.places.cellWidget(rr, 1 + d).value())
+            sp = self.places.cellWidget(r, 1 + d)
+            sp.blockSignals(True)
+            sp.setValue(sp.value() + 1)
+            sp.blockSignals(False)
+            days[d] += 1
+            missing -= 1
+            i += 1
         self._update_capacity()
 
     def _fill_rules(self):

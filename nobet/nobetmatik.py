@@ -9,7 +9,6 @@ Kurallar:
   - Yer yetmezse kimse dışarıda kalmaz: yerlere fazladan nöbetçi yazılır.
   - Nöbetçi idareciler günlere adil ve otomatik dağıtılır.
 """
-import math
 import calendar
 import datetime as dt
 from dataclasses import asdict, dataclass, field
@@ -49,8 +48,17 @@ class Config:
                 setattr(c, k, v)
         return c
 
+    def named_places(self):
+        """[(ad, [pzt..cum])] — boş adlı yerler atılır."""
+        return [(str(p).strip(), place_counts(n)) for p, n in self.places if str(p).strip()]
+
+    def day_capacity(self, day):
+        """O gün toplam kaç nöbetçi yeri var."""
+        return sum(c[day] for _p, c in self.named_places())
+
     def capacity(self):
-        return sum(int(n) for _p, n in self.places if str(_p).strip())
+        """Haftalık toplam nöbet yeri (günlerin toplamı)."""
+        return sum(self.day_capacity(d) for d in range(5))
 
 
 @dataclass
@@ -61,6 +69,16 @@ class Result:
     warnings: list = field(default_factory=list)
     unassigned: list = field(default_factory=list)
     reasons: dict = field(default_factory=dict)   # öğretmen -> neden nöbet verilmedi
+
+
+def place_counts(count):
+    """Nöbet yerinin gün başına kişi sayıları: [pzt, sal, çar, per, cum].
+
+    Eski kayıtlarda tek sayı vardır (her gün aynı); yenilerinde 5 sayılık liste."""
+    if isinstance(count, (list, tuple)):
+        vals = [max(0, int(v or 0)) for v in count][:5]
+        return vals + [vals[-1] if vals else 0] * (5 - len(vals))
+    return [max(0, int(count or 0))] * 5
 
 
 def month_weeks(month):
@@ -125,9 +143,8 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
     top_cov = max(covered.values(), default=0) or 1
     top_dem = max(demand.values(), default=0) or 1
     warnings = []
-    places = [(str(p).strip(), int(n)) for p, n in cfg.places if str(p).strip() and int(n) > 0]
-    capacity = sum(n for _p, n in places)
-    if not capacity:
+    cap = [cfg.day_capacity(d) for d in range(5)]      # günlere göre toplam nöbetçi yeri
+    if not sum(cap):
         return Result({d: [] for d in range(5)}, [], month_weeks(cfg.month),
                       ["Nöbet yeri girilmedi."], list(cfg.teachers))
     pool = [t for t in cfg.teachers if t not in cfg.exempt]
@@ -156,13 +173,20 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
     pool.sort(key=lambda t: (history.get(t, 0), weekly[t], normalize(t)))
     unassigned = []
     reasons = {}
-    need = math.ceil(len(pool) / 5)
-    expanded = need > capacity
+    total_slots = sum(cap)
+    expanded = len(pool) > total_slots
     if expanded:
-        warnings.append(f"Nöbet yerleri {len(pool)} öğretmene yetmediği için her gün {capacity} "
-                        f"yerine {need} nöbetçi yazıldı; fazladan kişiler yerlere sırayla "
-                        "eklendi. Herkes nöbet tutar.")
-        capacity = need
+        # Yer yetmezse en az yeri olan (ama açık) günlerden başlayarak fazladan nöbetçi yazılır
+        open_days = sorted((d for d in range(5) if cap[d] > 0), key=lambda d: (cap[d], d))
+        extra = len(pool) - total_slots
+        i = 0
+        while extra > 0 and open_days:
+            cap[open_days[i % len(open_days)]] += 1
+            extra -= 1
+            i += 1
+        warnings.append(f"Nöbet yerleri {len(pool)} öğretmene yetmediği için bazı günlerde "
+                        f"fazladan nöbetçi yazıldı (günlere göre {', '.join(map(str, cap))}); "
+                        "fazla kişiler yerlere sırayla eklendi. Herkes nöbet tutar.")
 
     groups = _Groups(pool)
     for a, b in cfg.together:
@@ -176,12 +200,13 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
     apart |= {(b, a) for a, b in apart}
 
     day_len = {d: school_day_length(schedule, d) for d in range(5)}
+    closed = {d for d in range(5) if cap[d] == 0}          # o gün hiç nöbet yeri yok
     load = {d: 0 for d in range(5)}
     by_day = {d: [] for d in range(5)}
     unit_days = {r: [] for r in units}
 
     def unit_allowed(r):
-        days = set(range(5))
+        days = set(range(5)) - closed
         for t in units[r]:
             days &= allowed(t)
         return days
@@ -191,12 +216,12 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
                 for t in units[r])
         # Bu yıl çok boş derse girenleri, geçmişte boş dersi az olan günlere yönlendir
         c += 3 * sum(covered.get(t, 0) / top_cov for t in units[r]) * demand.get(d, 0) / top_dem
-        return c + 3 * load[d] / capacity   # günleri dengeli doldur
+        return c + 3 * load[d] / max(1, cap[d])   # günleri dengeli doldur
 
     def place_unit(r, overflow=False):
         size = len(units[r])
         options = [d for d in unit_allowed(r) - set(unit_days[r])
-                   if (overflow or load[d] + size <= capacity)
+                   if (overflow or load[d] + size <= cap[d])
                    and not any((r, o) in apart and d in unit_days[o] for o in units)]
         if not options:
             return False
@@ -223,7 +248,7 @@ def distribute(cfg, schedule, history=None, covered=None, demand=None):
         for r in sorted(units, key=lambda r: (history.get(units[r][0], 0), normalize(units[r][0]))):
             if unit_days[r]:
                 place_unit(r)
-    free = sum(capacity - load[d] for d in range(5))
+    free = sum(max(0, cap[d] - load[d]) for d in range(5))
     if free and not expanded:
         warnings.append(f"Haftada {free} nöbet yeri boş kaldı (öğretmen sayısı yetmedi). "
                         "'Gerekirse haftada 2 nöbet' seçeneğini açabilirsiniz.")
@@ -266,27 +291,29 @@ def build_entries(cfg, by_day):
     """Gün dağılımından tarihli nöbet kayıtlarını üretir.
 
     Yerler karışık sırayla (Bahçe, Zemin, 1. Kat, ...) verilir ve her hafta bir kaydırılır;
-    yere sabitlenen öğretmen her hafta aynı yerde kalır.
+    yere sabitlenen öğretmen her hafta aynı yerde kalır. Yerlerin kişi sayısı günlere göre
+    değişebilir (ör. 2. Kat pazartesi 3, salı 2 kişi).
     """
-    places = [(str(p).strip(), int(n)) for p, n in cfg.places if str(p).strip() and int(n) > 0]
+    places = cfg.named_places()
     fixed_place = {f["teacher"]: f.get("place") or "" for f in cfg.fixed if f.get("place")}
     entries = []
     weeks = month_weeks(cfg.month)
     for d in range(5):
         fixed_here = [t for t in by_day.get(d, []) if t in fixed_place]
         rotating = sorted((t for t in by_day.get(d, []) if t not in fixed_place), key=normalize)
-        remaining = dict(places)
+        remaining = {p: c[d] for p, c in places}
         for t in fixed_here:
             if fixed_place[t] in remaining:
                 remaining[fixed_place[t]] -= 1
         slots, left = [], dict(remaining)
         while any(v > 0 for v in left.values()):
-            for p, _n in places:
+            for p, _c in places:
                 if left.get(p, 0) > 0:
                     slots.append(p)
                     left[p] -= 1
-        while len(slots) < len(rotating):      # elle fazladan kişi eklendiyse yerleri tekrarla
-            slots += [p for p, _n in places] or [""]
+        day_places = [p for p, c in places if c[d] > 0] or [p for p, _c in places]
+        while len(slots) < len(rotating):      # fazladan kişi varsa o günün yerlerini tekrarla
+            slots += day_places or [""]
         slots = slots[:len(rotating)]
         for w, (_monday, dates) in enumerate(weeks):
             for date in dates:
@@ -319,9 +346,10 @@ def move_teacher(cfg, result, schedule, teacher, new_day):
             result.unassigned.remove(teacher)
         if lesson_count(schedule, teacher, new_day) == 0:
             note = f"{teacher} {DAYS[new_day]} günü dersi olmadığı halde nöbete yazıldı."
-        elif len(result.by_day[new_day]) > cfg.capacity():
+        elif len(result.by_day[new_day]) > cfg.day_capacity(new_day):
             note = (f"{DAYS[new_day]} günü nöbetçi sayısı ({len(result.by_day[new_day])}) nöbet "
-                    f"yeri sayısını ({cfg.capacity()}) aştı; bazı yerlerde fazladan kişi olur.")
+                    f"yeri sayısını ({cfg.day_capacity(new_day)}) aştı; bazı yerlerde fazladan "
+                    "kişi olur.")
     elif teacher not in result.unassigned:
         result.unassigned.append(teacher)
     result.entries, result.weeks = build_entries(cfg, result.by_day)

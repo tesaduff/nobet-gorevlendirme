@@ -151,7 +151,7 @@ def test_plan_prefers_duty_and_fairness():
     assert by_hour[4].assigned == "N1"
 
 
-def test_plan_falls_back_to_free_teacher_with_note():
+def test_plan_leaves_empty_when_no_duty_teacher_free():
     date = "2026-11-02"
     sched = _schedule()
     sched["N2"] = {(0, 2): "x", (0, 4): "x"}
@@ -159,11 +159,12 @@ def test_plan_falls_back_to_free_teacher_with_note():
     sched["N1"][(0, 4)] = "x"
     plan = plan_day(date, sched, duty, {"A": "İzinli"}, {}, {})
     by_hour = {a.hour: a for a in plan.assignments}
-    assert by_hour[2].assigned == "B" and by_hour[2].kind == "bos"
-    assert "nöbetçi değil" in by_hour[2].note
-    assert "iki dersi arasında" in by_hour[2].note
-    # 4. saat: B ve N3 boş, ikisi de pencere değil; bugün daha az giren N3 seçilir
-    assert by_hour[4].assigned == "N3" and by_hour[4].kind == "bos"
+    # 2. saat: iki nöbetçi de dolu → ders boş kalır (kimse atanmaz), ama B seçenek olarak durur
+    assert by_hour[2].assigned is None and by_hour[2].kind == "yok"
+    assert "elle seçin" in by_hour[2].note
+    assert ("B", "pencere") in by_hour[2].options
+    # 4. saat: N1 ve N2 dolu; boş kalır, N3/B yalnızca elle seçilebilir
+    assert by_hour[4].assigned is None and any(t == "N3" for t, _l in by_hour[4].options)
 
 
 def test_plan_unassigned():
@@ -265,14 +266,14 @@ def test_pdf_carsaf_and_duty(tmp_path, has_font):
     assert got == {(0, "Ahmet YILMAZ"), (0, "Ayşe KAYA"), (1, "Can DEMİR")}
 
 
-def test_daily_cap_moves_to_free_teacher():
+def test_daily_cap_keeps_duty_teacher_when_nobody_else():
     sched = {"A": {(0, 1): "9A", (0, 2): "9A", (0, 3): "9A"},
              "N": {}, "B": {(0, 4): "x"}}
     plan = plan_day("2026-11-02", sched, [("N", "")], {"A": "R"}, {}, {}, max_per_day=2)
+    # Yalnızca nöbetçilere görev verilir; sınır aşılsa da ders boş kalmaz
     got = [(a.assigned, a.kind) for a in plan.assignments]
-    assert got == [("N", "nobetci"), ("N", "nobetci"), ("B", "bos")]
-    assert "sınırına ulaştığı" in plan.assignments[2].note
-    # B de olmasa sınır aşılır ama ders boş kalmaz
+    assert got == [("N", "nobetci")] * 3
+    assert "sınırı aşıldı" in plan.assignments[2].note
     plan = plan_day("2026-11-02", {k: v for k, v in sched.items() if k != "B"}, [("N", "")],
                     {"A": "R"}, {}, {}, max_per_day=2)
     assert [a.assigned for a in plan.assignments] == ["N", "N", "N"]
@@ -408,7 +409,7 @@ def test_admins_never_assigned_and_split_blocks(tmp_path):
     sched = {"A": {(0, 1): "9A"}, "IDARECI": {(0, 2): "x"}, "B": {(0, 3): "x"}}
     plan = plan_day("2026-11-02", sched, [("IDARECI", "N.İDARECİ")], {"A": "R"}, {}, {},
                     excluded={"IDARECI"})
-    assert plan.assignments[0].assigned == "B" and plan.assignments[0].kind == "bos"
+    assert plan.assignments[0].assigned is None       # nöbetçi olmayan B otomatik atanmaz
     only_admin = plan_day("2026-11-02", {"A": {(0, 1): "9A"}, "IDARECI": {(0, 2): "x"}}, [],
                           {"A": "R"}, {}, {}, excluded={"IDARECI"})
     assert only_admin.assignments[0].assigned is None
@@ -617,16 +618,6 @@ def test_nobetmatik_rules_override_free_days():
     assert all(res.reasons.get(t) for t in res.unassigned)
 
 
-def test_jokers_used_before_other_teachers():
-    from nobet.scheduler import plan_day
-    # A gelmedi (1. saat dersi var); nöbetçi N o saatte dolu; J joker; O başka boş öğretmen
-    sched = {"A": {(0, 1): "6/A MAT"}, "N": {(0, 1): "7/B FEN"}, "O": {(0, 2): "5/C TÜR"}}
-    plan = plan_day("2026-11-02", sched, [("N", "Bahçe")], {"A": "Raporlu"}, {}, {},
-                    jokers=["J"])
-    a = plan.assignments[0]
-    assert a.assigned == "J" and a.kind == "joker"
-    assert [t for t, lab in a.options if lab == "joker"] == ["J"]
-
 
 def test_delete_single_absent_teacher(tmp_path):
     from nobet.db import Database
@@ -637,18 +628,7 @@ def test_delete_single_absent_teacher(tmp_path):
     db.delete_absent("2026-11-02", "A")
     assert db.absences("2026-11-02") == {"B": "İzinli"}
     assert [r[1] for r in db.assignments("2026-11-02")] == ["B"]
-    db.set_jokers("2026-11-02", ["J", "K"])
-    assert db.jokers("2026-11-02") == ["J", "K"]
 
-
-def test_joker_daily_limit_then_others():
-    from nobet.scheduler import JOKER_MAX, plan_day
-    # A'nın 8 dersi var, nöbetçi yok; joker J en fazla JOKER_MAX ders alır, kalan O'ya gider
-    sched = {"A": {(0, h): f"6/A D{h}" for h in range(1, 9)}, "O": {(0, 9): "5/A X"}}
-    plan = plan_day("2026-11-02", sched, [], {"A": "Raporlu"}, {}, {}, jokers=["J"])
-    kinds = [a.kind for a in sorted(plan.assignments, key=lambda a: a.hour)]
-    assert kinds.count("joker") == JOKER_MAX
-    assert kinds[-1] == "bos" and plan.assignments[-1].assigned == "O"
 
 
 def test_teacher_programs_show_own_and_tasks():
@@ -664,22 +644,6 @@ def test_teacher_programs_show_own_and_tasks():
     assert "GÜNLÜK PROGRAMI" in programs_html(plan, sched)
 
 
-def test_joker_with_own_lessons_counts_as_free():
-    from nobet.scheduler import plan_day
-    # J ders programında var ve o gün dersleri var; joker yapılınca derssiz sayılır
-    sched = {"A": {(0, h): f"6/A D{h}" for h in range(1, 4)}, "J": {(0, 1): "5/A X", (0, 2): "5/B X"},
-             "O": {(0, 9): "5/C Y"}}
-    plan = plan_day("2026-11-02", sched, [], {"A": "Raporlu"}, {}, {}, jokers=["J"])
-    assert all(a.assigned == "J" and a.kind == "joker" for a in plan.assignments)
-
-
-def test_joker_filled_before_duty_teachers():
-    from nobet.scheduler import JOKER_MAX, plan_day
-    sched = {"A": {(0, h): f"6/A D{h}" for h in range(1, 9)}}
-    plan = plan_day("2026-11-02", sched, [("N", "Bahçe")], {"A": "Raporlu"}, {}, {},
-                    jokers=["J"])
-    by_kind = [a.kind for a in sorted(plan.assignments, key=lambda a: a.hour)]
-    assert by_kind.count("joker") == JOKER_MAX and by_kind[-1] == "nobetci"
 
 
 def test_join_split_blocks_and_destek_expected_without_class():
@@ -694,3 +658,55 @@ def test_join_split_blocks_and_destek_expected_without_class():
     assert s[(1, 3)] == s[(1, 4)] == "5A MAT."
     assert s[(2, 1)] == "DESTEK"            # destek dersine sınıf kopyalanmaz
     assert not needs_class("DESTEK") and needs_class("FEN") and not needs_class("6/A FEN")
+
+
+def test_places_per_day_counts():
+    from nobet.nobetmatik import Config, distribute, place_counts
+    assert place_counts(2) == [2] * 5 and place_counts([3, 2, 2, 2, 0]) == [3, 2, 2, 2, 0]
+    sched = _sched(10)
+    cfg = Config(month="2026-11", teachers=sorted(sched),
+                 places=[["Bahçe", [1, 1, 1, 1, 0]], ["2. Kat", [3, 2, 2, 2, 0]]])
+    assert [cfg.day_capacity(d) for d in range(5)] == [4, 3, 3, 3, 0]
+    res = distribute(cfg, sched)
+    # Cuma günü hiç nöbet yeri yok: kimse cumaya yazılmaz
+    assert not res.by_day[4]
+    by_date = {}
+    for e in res.entries:
+        by_date.setdefault(e.date, []).append(e.place)
+    mondays = [v for d, v in by_date.items() if __import__("datetime").date.fromisoformat(d).weekday() == 0]
+    if mondays:
+        assert mondays[0].count("2. Kat") >= 2     # pazartesi 2. katta 3 kişi, salı 2
+
+
+def test_only_duty_teachers_get_lessons_rest_left_empty():
+    from nobet.scheduler import plan_day
+    sched = {"A": {(0, h): f"6/A D{h}" for h in range(1, 4)}, "N": {(0, 2): "7/C FEN"},
+             "O": {(0, 9): "5/C Y"}}
+    plan = plan_day("2026-11-02", sched, [("N", "Bahçe")], {"A": "Raporlu"}, {}, {})
+    by_hour = {a.hour: a for a in plan.assignments}
+    assert by_hour[1].assigned == "N" and by_hour[3].assigned == "N"
+    assert by_hour[2].assigned is None and by_hour[2].kind == "yok"     # N o saatte dolu
+    # nöbetçi olmayan O listede seçenek olarak durur ama otomatik atanmaz
+    assert ("O", "boş saat") in by_hour[2].options or ("O", "pencere") in by_hour[2].options
+
+
+def test_blocked_hours_not_assigned_and_not_offered():
+    from nobet.scheduler import plan_day
+    sched = {"A": {(0, h): f"6/A D{h}" for h in (1, 2, 3, 4)}, "N": {(0, 9): "x"}, "M": {(0, 9): "y"}}
+    plan = plan_day("2026-11-02", sched, [("N", "Bahçe"), ("M", "Kat")], {"A": "Raporlu"}, {}, {},
+                    blocked={"N": {1, 4}})
+    by_hour = {a.hour: a for a in plan.assignments}
+    assert by_hour[1].assigned == "M" and by_hour[4].assigned == "M"
+    assert all(t != "N" for t, _l in by_hour[1].options)
+    plan2 = plan_day("2026-11-02", sched, [("N", "Bahçe")], {"A": "Raporlu"}, {}, {},
+                     blocked={"N": {1}})
+    assert {a.hour: a for a in plan2.assignments}[1].assigned is None
+
+
+def test_assign_blocks_db(tmp_path):
+    from nobet.db import Database
+    db = Database(str(tmp_path / "k.db"))
+    db.set_assign_blocks([{"teacher": "A", "day": 2, "hours": [1, 4], "reason": "mazeret"},
+                          {"teacher": "B", "day": -1, "hours": [7]}])
+    assert db.blocked_hours(2) == {"A": {1, 4}, "B": {7}}
+    assert db.blocked_hours(0) == {"B": {7}}

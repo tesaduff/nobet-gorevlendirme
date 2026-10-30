@@ -38,12 +38,6 @@ CREATE TABLE IF NOT EXISTS absences (
     PRIMARY KEY (date, teacher)
 );
 
-CREATE TABLE IF NOT EXISTS jokers (
-    date TEXT NOT NULL,
-    teacher TEXT NOT NULL,
-    PRIMARY KEY (date, teacher)
-);
-
 CREATE TABLE IF NOT EXISTS assignments (
     date TEXT NOT NULL,
     hour INTEGER NOT NULL,
@@ -214,15 +208,27 @@ class Database:
                          for a in assignments])
         self.conn.commit()
 
-    def jokers(self, date):
-        return [r[0] for r in self.conn.execute(
-            "SELECT teacher FROM jokers WHERE date=? ORDER BY teacher", (date,))]
+    # ---- ders kısıtları: öğretmene belli gün/saatlerde ders görevlendirilmez
+    def assign_blocks(self):
+        """[{"teacher", "day" (-1 = her gün, 0..4), "hours": [saat, ...], "reason"}]"""
+        import json
+        try:
+            items = json.loads(self.get_setting("assign_blocks", "[]") or "[]")
+        except ValueError:
+            items = []
+        return [i for i in items if isinstance(i, dict) and i.get("teacher") and i.get("hours")]
 
-    def set_jokers(self, date, names):
-        self.conn.execute("DELETE FROM jokers WHERE date=?", (date,))
-        self.conn.executemany("INSERT OR IGNORE INTO jokers VALUES (?,?)",
-                              [(date, n) for n in names if n])
-        self.conn.commit()
+    def set_assign_blocks(self, items):
+        import json
+        self.set_setting("assign_blocks", json.dumps(items, ensure_ascii=False))
+
+    def blocked_hours(self, weekday):
+        """O gün (0..4) için {öğretmen: {kısıtlı saatler}}."""
+        out = {}
+        for b in self.assign_blocks():
+            if int(b.get("day", -1)) in (-1, weekday):
+                out.setdefault(b["teacher"], set()).update(int(h) for h in b["hours"])
+        return out
 
     def delete_absent(self, date, teacher):
         """Bir günün yalnızca bir gelmeyen öğretmenine ait kaydını siler (istatistikten de)."""
@@ -323,10 +329,10 @@ class Database:
 
     def reset_all(self):
         """Ders programı, nöbet çizelgeleri ve tüm kayıtları siler; okul bilgileri ve ayarlar kalır."""
-        for table in ("schedule_entries", "schedule_versions", "duty_entries", "absences", "jokers",
+        for table in ("schedule_entries", "schedule_versions", "duty_entries", "absences",
                       "assignments"):
             self.conn.execute(f"DELETE FROM {table}")
-        for key in ("admins_extra", "admins_removed", "admins_confirmed"):
+        for key in ("admins_extra", "admins_removed", "admins_confirmed", "assign_blocks"):
             self.conn.execute("DELETE FROM settings WHERE key=?", (key,))
         self.conn.commit()
 
@@ -409,6 +415,7 @@ class Database:
             sched = self.schedule(vid) if vid else {}
             wd = dt.date.fromisoformat(date).weekday()
             absent = self.absences(date)
+            blocks = self.blocked_hours(wd)
             duty = {t for t, _p in self.duty_for(date)[0] if t not in admins}
             taken = {}
             wk = by_weekday.setdefault(wd, [0, set()])
@@ -416,10 +423,11 @@ class Database:
             for hour, _absent, _info, assigned, kind, _note in sorted(self.assignments(date)):
                 wk[0] += 1
                 free = [t for t in duty if t not in absent and (wd, hour) not in sched.get(t, {})
-                        and t not in taken.get(hour, set())]
+                        and t not in taken.get(hour, set())
+                        and hour not in blocks.get(t, ())]
                 for t in free:
                     row(t)["chances"] += 1
-                if free and assigned and kind != "joker":   # joker önceliklidir, istisna değil
+                if free and assigned:
                     best = min(running.get(t, 0) for t in free)
                     if assigned not in free:
                         exceptions.append((date, hour, assigned, "o saatte boş nöbetçi varken"))

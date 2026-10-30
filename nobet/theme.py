@@ -32,9 +32,9 @@ BACKGROUNDS = {"Sade": ("#f4f6fb", "#0f172a"), "Renk geçişli": (None, None),
 FONTS = ["Segoe UI", "Calibri", "Arial", "Tahoma", "Verdana", "Trebuchet MS"]
 
 # Tablo satır renkleri: arayüz bu nesneleri kullanır, tema değişince yerinde güncellenir.
-GREEN, YELLOW, RED, BLUE, PURPLE = QColor(), QColor(), QColor(), QColor(), QColor()
-_ROWS = {False: ("#e7f8ee", "#fff6db", "#fde7e7", "#e8edff", "#f1e6ff"),
-         True: ("#123527", "#3d3315", "#47201f", "#252b4d", "#3b2557")}
+GREEN, YELLOW, RED, BLUE = QColor(), QColor(), QColor(), QColor()
+_ROWS = {False: ("#e7f8ee", "#fff6db", "#fde7e7", "#e8edff"),
+         True: ("#123527", "#3d3315", "#47201f", "#252b4d")}
 
 ACCENT = ACCENTS["Mor"][0]
 MUTED = "#64748b"
@@ -77,7 +77,7 @@ def build_style(accent="Mor", dark=False, radius="Normal", background="Sade"):
                                        ("#fff7e0", "#854d0e", "#facc15"))
     ACCENT = a
     TEXT_COLOR = TEXT
-    for color, value in zip((GREEN, YELLOW, RED, BLUE, PURPLE), _ROWS[dark]):
+    for color, value in zip((GREEN, YELLOW, RED, BLUE), _ROWS[dark]):
         color.setRgb(QColor(value).rgb())
     tone = "light" if dark else "dark"
     ARROW_DOWN = resource(f"chevron_down_{tone}.png").replace("\\", "/")
@@ -103,15 +103,10 @@ QGroupBox::title {{
     background: transparent;
 }}
 QFrame#card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: {R2}px; }}
-QFrame#jokerCard {{
+QFrame#blockCard {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {a_soft}, stop:1 {CARD});
     border: 1px solid {a}; border-left: 5px solid {a}; border-radius: {R2}px;
 }}
-QPushButton#chip {{
-    background: {a}; color: white; border: none; border-radius: 13px; padding: 4px 12px;
-    font-weight: 600;
-}}
-QPushButton#chip:hover {{ background: #dc2626; }}
 QLabel#okMsg {{ color: #15803d; font-weight: 600; }}
 QListWidget#absentList {{
     background: transparent; border: none; outline: none;
@@ -244,12 +239,6 @@ QHeaderView::section {{
 }}
 QTableCornerButton::section {{ background: {HEAD}; border: none; }}
 QListWidget#list::item {{ padding: 7px 8px; border-radius: 6px; }}
-QListWidget#chips {{ background: transparent; border: none; }}
-QListWidget#chips::item {{
-    background: {a_soft}; color: {TEXT}; border: 1px solid {a}; border-radius: 12px;
-    padding: 3px 10px;
-}}
-QListWidget#chips::item:selected {{ background: {a}; color: white; }}
 QListWidget#list::item:selected {{ background: {a_soft}; color: {TEXT}; }}
 
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
