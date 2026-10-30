@@ -1,4 +1,9 @@
-Sürüm 2.8.0
+Sürüm 2.8.1
+
+- Nöbet çizelgesi Düzenle penceresinde (PDF'den yüklenen çizelgeler dahil) sol tarafta "Nöbet tutan öğretmenler" listesi: tik = çizelgede nöbet tutuyor. Tiki kaldırınca öğretmenin satırları çizelgeden çıkar, geri koyunca yeniden gelir; tiki olmayan birini işaretleyince yeni satır eklenir (gün ve nöbet yerini girersiniz). Tablodan elle satır silmek ya da eklemek listeyi de günceller. Bu liste sonradan da, her Düzenle'de görünür
+- Nöbetmatik 1. adımda, kayıtlı bir çizelgesi olan ay seçilince o çizelgede nöbet tutanlar işaretli gelir; tikleri değiştirip yeniden dağıtabilirsiniz
+
+Sürüm 2.8.0'daki yenilikler
 
 Nöbet çizelgesi:
 - Nöbet yerlerinin kişi sayısı günlere göre ayrı girilir (ör. 2. Kat pazartesi 3 kişi, salı 2 kişi; 0 yazılan gün o yerde nöbetçi olmaz). Dağıtım, baskı ve kayıtlar günlere göre sayılara uyar

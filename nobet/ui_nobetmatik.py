@@ -394,6 +394,11 @@ class NobetmatikPage(QWidget):
         admins = self.db.admins()
         teachers = sorted((t for t in self.schedule if t not in admins), key=normalize)
         known = set(self.cfg.teachers)
+        # Seçilen ayın kayıtlı bir nöbet çizelgesi varsa (PDF'den yüklenmiş ya da önceden
+        # oluşturulmuş), nöbet tutanlar işaretli gelir; tikleri değiştirip yeniden dağıtılabilir.
+        chart = {t for _wd, _d, t, _p in self.db.duty_rows(month) if t in set(teachers)}
+        if chart and (self.cfg.month != month or not known):
+            known = chart
         self.teach.setRowCount(len(teachers))
         self.teach_checks = []
         for r, t in enumerate(teachers):
@@ -417,7 +422,9 @@ class NobetmatikPage(QWidget):
                     it.setForeground(QColor(theme.MUTED))
                 self.teach.setItem(r, 2 + d, it)
         self.teach_info.setText(
-            f"Ders programından {len(teachers)} öğretmen alındı (idareciler hariç). Nöbet "
+            f"Ders programından {len(teachers)} öğretmen alındı (idareciler hariç)"
+            + (f"; {export.month_tr(month)} çizelgesinde nöbet tutan {len(chart)} öğretmen işaretli."
+               if chart else ".") + " Nöbet "
             "tutmayacakların işaretini kaldırın. Muafiyetleri 4. adımda (Kurallar) mazeretiyle "
             "ekleyebilirsiniz.")
         self.duty_admins = self._duty_admins(admins)

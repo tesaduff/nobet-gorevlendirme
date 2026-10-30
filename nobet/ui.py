@@ -960,9 +960,11 @@ class DutyEditDialog(QDialog):
     def __init__(self, parent, entries, teachers, month, unmatched=(), warnings=()):
         super().__init__(parent)
         self.setWindowTitle("Nöbet çizelgesi — kontrol edip kaydedin")
-        self.resize(900, 650)
+        self.resize(1180, 700)
         self.teachers = sorted(teachers, key=normalize)
         self.matcher = NameMatcher(self.teachers)
+        self._kept = {}          # tiki kaldırılan öğretmenin satırları (geri koyunca dönsün)
+        self._syncing = False
 
         self.month = MonthPicker(month)
 
@@ -972,6 +974,46 @@ class DutyEditDialog(QDialog):
         _stretch(self.table, 2, 3)
         for e in sorted(entries, key=lambda e: (e.date or "", e.weekday, e.place, e.teacher)):
             self._add_row(e)
+
+        # Sol: nöbet tutan öğretmenler (tik = çizelgede var). Tiki kaldırınca öğretmenin
+        # satırları çizelgeden çıkar; tiki koyunca yeni satır eklenir.
+        self.t_search = QLineEdit()
+        self.t_search.setPlaceholderText("🔍  Öğretmen ara…")
+        self.t_search.setMinimumHeight(34)
+        self.t_list = QListWidget()
+        self.t_list.setObjectName("list")
+        extra = sorted({e.teacher for e in entries if e.teacher and e.teacher not in self.teachers},
+                       key=normalize)
+        for name in self.teachers + extra:
+            it = QListWidgetItem(name)
+            it.setData(Qt.UserRole, name)
+            it.setFlags(it.flags() & ~Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Unchecked)
+            if name in extra:
+                it.setForeground(QColor("#dc2626"))
+                it.setToolTip("Ders programında yok")
+            self.t_list.addItem(it)
+        self.t_list.itemClicked.connect(self._tick_clicked)
+        self.t_search.textChanged.connect(self._t_filter)
+        self.t_count = QLabel()
+        self.t_count.setObjectName("subtitle")
+        self.t_msg = QLabel()
+        self.t_msg.setObjectName("okMsg")
+        self.t_msg.setWordWrap(True)
+        left = QGroupBox("Nöbet tutan öğretmenler")
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(10, 18, 10, 10)
+        hint_l = QLabel("Tik = nöbet tutuyor. Tiki kaldırırsanız satırları çizelgeden çıkar; "
+                        "koyarsanız yeni satır eklenir (gün ve yerini siz seçersiniz).")
+        hint_l.setWordWrap(True)
+        hint_l.setObjectName("subtitle")
+        lv.addWidget(hint_l)
+        lv.addWidget(self.t_search)
+        lv.addWidget(self.t_list, 1)
+        lv.addWidget(self.t_count)
+        lv.addWidget(self.t_msg)
+        left.setMinimumWidth(280)
+        left.setMaximumWidth(340)
 
         add = QPushButton("Satır ekle")
         add.clicked.connect(lambda: self._add_row(DutyEntry(0, "", "")))
@@ -1001,10 +1043,16 @@ class DutyEditDialog(QDialog):
         v = QVBoxLayout(self)
         v.addLayout(form)
         v.addWidget(QLabel("Tarih sütunu boşsa çizelge her hafta o gün için geçerlidir."))
-        v.addWidget(self.table, 1)
-        v.addLayout(hb)
+        right = QVBoxLayout()
+        right.addWidget(self.table, 1)
+        right.addLayout(hb)
+        body = QHBoxLayout()
+        body.addWidget(left)
+        body.addLayout(right, 1)
+        v.addLayout(body, 1)
         v.addWidget(info)
         v.addWidget(buttons)
+        self._sync()
 
     def _add_row(self, e):
         r = self.table.rowCount()
@@ -1023,6 +1071,7 @@ class DutyEditDialog(QDialog):
         comp.setFilterMode(Qt.MatchContains)
         who.setCompleter(comp)
         self.table.setCellWidget(r, 2, who)
+        who.currentTextChanged.connect(lambda _t: self._sync())
         self.table.setItem(r, 3, _item(e.place, True))
         if e.teacher and e.teacher not in self.teachers:
             who.setStyleSheet("background:#ffd6d6")
@@ -1032,6 +1081,83 @@ class DutyEditDialog(QDialog):
     def _remove(self):
         for r in sorted({i.row() for i in self.table.selectedIndexes()}, reverse=True):
             self.table.removeRow(r)
+        self._sync()
+
+    # ---- nöbet tutan öğretmenler listesi
+    def _resolve(self, text):
+        name = (text or "").strip()
+        if not name:
+            return ""
+        return name if name in self.teachers else (self.matcher.match(name) or clean_name(name))
+
+    def _present(self):
+        """Tabloda satırı olan öğretmenler."""
+        return {self._resolve(self.table.cellWidget(r, 2).currentText())
+                for r in range(self.table.rowCount())} - {""}
+
+    def _sync(self):
+        """Tik işaretlerini tablodaki satırlara göre günceller."""
+        if self._syncing or not hasattr(self, "t_list"):
+            return
+        self._syncing = True
+        present = self._present()
+        for i in range(self.t_list.count()):
+            it = self.t_list.item(i)
+            it.setCheckState(Qt.Checked if it.data(Qt.UserRole) in present else Qt.Unchecked)
+        self.t_count.setText(f"Nöbet tutan: <b>{len(present)}</b> / {len(self.teachers)} öğretmen")
+        self._syncing = False
+
+    def _t_filter(self, text):
+        key = normalize(text)
+        for i in range(self.t_list.count()):
+            self.t_list.item(i).setHidden(bool(key) and
+                                          key not in normalize(self.t_list.item(i).text()))
+
+    def _row_entry(self, r):
+        name = self._resolve(self.table.cellWidget(r, 2).currentText())
+        wd = self.table.cellWidget(r, 0).currentIndex()
+        raw = self.table.item(r, 1).text().strip() if self.table.item(r, 1) else ""
+        date = None
+        if raw:
+            q = QDate.fromString(raw, "dd.MM.yyyy")
+            if q.isValid():
+                date = _iso(q)
+                wd = min(q.dayOfWeek() - 1, 4)
+        place = self.table.item(r, 3).text().strip() if self.table.item(r, 3) else ""
+        return DutyEntry(wd, name, place, date)
+
+    def _tick_clicked(self, item):
+        name = item.data(Qt.UserRole)
+        if name in self._present():
+            # Tiki kaldır: satırları çizelgeden çıkar (geri koyunca dönsün)
+            kept = []
+            for r in reversed(range(self.table.rowCount())):
+                if self._resolve(self.table.cellWidget(r, 2).currentText()) == name:
+                    kept.append(self._row_entry(r))
+                    self.table.removeRow(r)
+            self._kept[name] = kept
+            self._sync()
+            self.t_msg.setText(f"➖ {name} çizelgeden çıkarıldı ({len(kept)} satır).")
+            return
+        rows = self._kept.pop(name, None)
+        if rows:
+            first = None
+            for e in reversed(rows):
+                self._add_row(e)
+                first = first if first is not None else self.table.rowCount() - 1
+            self._sync()
+            self.t_msg.setText(f"✅ {name} geri eklendi ({len(rows)} satır).")
+            self.table.selectRow(self.table.rowCount() - 1)
+            return
+        self._add_row(DutyEntry(0, name, ""))
+        r = self.table.rowCount() - 1
+        self.table.item(r, 3).setBackground(YELLOW)
+        self.table.item(r, 3).setToolTip("Nöbet yerini yazın, günü soldaki kutudan seçin")
+        self.table.scrollToItem(self.table.item(r, 3))
+        self.table.selectRow(r)
+        self._sync()
+        self.t_msg.setText(f"✅ {name} eklendi: tabloda <b>gün</b> ve <b>nöbet yerini</b> girin "
+                           "(sarı hücre).")
 
     def _accept(self):
         bad = []
@@ -1047,20 +1173,9 @@ class DutyEditDialog(QDialog):
     def entries(self):
         out = []
         for r in range(self.table.rowCount()):
-            name = self.table.cellWidget(r, 2).currentText().strip()
-            if not name:
+            if not self.table.cellWidget(r, 2).currentText().strip():
                 continue
-            name = name if name in self.teachers else (self.matcher.match(name) or clean_name(name))
-            wd = self.table.cellWidget(r, 0).currentIndex()
-            raw = self.table.item(r, 1).text().strip() if self.table.item(r, 1) else ""
-            date = None
-            if raw:
-                q = QDate.fromString(raw, "dd.MM.yyyy")
-                if q.isValid():
-                    date = _iso(q)
-                    wd = min(q.dayOfWeek() - 1, 4)
-            place = self.table.item(r, 3).text().strip() if self.table.item(r, 3) else ""
-            out.append(DutyEntry(wd, name, place, date))
+            out.append(self._row_entry(r))
         return out
 
     def month_key(self):
